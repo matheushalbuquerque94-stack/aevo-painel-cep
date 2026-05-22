@@ -1,0 +1,46 @@
+# Secrets — NUNCA versionar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+*.pyc
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Cache local de dados (gerado em runtime)
+cache/
+_diag_*
+_test_*
+_repro_*
+_audit_*
+_validate_*
+_run_*.log
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Sistemas operacionais
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Builds Playwright
+.playwright/
+
+# Pastas locais que nao vao para o repo
+BACKUP/
+*.zip
+.claude/
+
+# Arquivos batch locais (usar Procfile/railway.json em produçao)
+instalar.bat
+rodar.bat
