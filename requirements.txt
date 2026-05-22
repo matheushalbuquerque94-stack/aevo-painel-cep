@@ -7,3 +7,5 @@ pytz
 nest-asyncio
 playwright>=1.40
 bcrypt>=4.1
+plotly>=5.18
+pydeck>=0.9
