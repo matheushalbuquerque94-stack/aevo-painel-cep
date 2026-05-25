@@ -2136,78 +2136,104 @@ if run:
     st.session_state.html_cache = None
     ps_id_isc=ISC_MAP.get(pid)
 
-    with st.spinner("Buscando dados cadastrais..."):
-        df_cad =sql("SELECT name,nominal_power_kwp,om_contract,contract_end FROM public.plant_plant WHERE id="+str(pid))
-        cad    =df_cad.iloc[0].to_dict() if not df_cad.empty else {}
-        kwp    =float(cad.get("nominal_power_kwp") or 0)
-        df_pv  =load_pvsyst(pid,ano,mes)
-        pvsyst =df_pv.iloc[0].to_dict() if not df_pv.empty else {}
-        if not pvsyst.get("e_grid") and pv_egrid_manual>0:
-            pvsyst["e_grid"]=pv_egrid_manual
-            st.caption("PVsyst E_grid: manual (%.0f kWh)" % pv_egrid_manual)
-        if not pvsyst.get("pr") and pv_pr_manual>0: pvsyst["pr"]=pv_pr_manual
-        if not pvsyst.get("glob_inc") and pv_globinc_manual>0: pvsyst["glob_inc"]=pv_globinc_manual
-        if not pvsyst.get("p50") and pv_p50_manual>0: pvsyst["p50"]=pv_p50_manual
-        if not pvsyst.get("p75") and pv_p75_manual>0: pvsyst["p75"]=pv_p75_manual
-        if not pvsyst: st.warning("PVsyst nao encontrado. Preencha no sidebar.")
-        df_al  =pd.DataFrame() if ps_id_isc else load_alertas(pid,ano,mes)
+    # ── Tentativa rapida: ler do Supabase (se nao ha overrides manuais) ──
+    _from_sb = None
+    _no_overrides = (poa_manual==0 and pv_egrid_manual==0 and pv_pr_manual==0
+                     and pv_globinc_manual==0 and pv_p50_manual==0 and pv_p75_manual==0)
+    if _no_overrides:
+        with st.spinner("Verificando cache no Supabase..."):
+            try: _from_sb = coletar_do_supabase(pid, ano, mes)
+            except Exception: _from_sb = None
 
-    # â\x94\x80â\x94\x80 Energia (iSolarCloud ou banco) â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80
-    fonte_energia="Banco AEVO"; df_daily=pd.DataFrame(); ghost_pks=set()
-    if ps_id_isc:
-        with st.spinner("Conectando ao iSolarCloud..."):
-            token=isc_login()
-        if token:
-            _c_en=_cache_load(ps_id_isc,ano,mes,"energia") if _mes_fechado(ano,mes) else None
-            if _c_en:
-                df_daily,msg,ghost_pks=_c_en
-                st.caption("⚡ Energia: cache disco")
+    if _from_sb:
+        cad = _from_sb["cad"]; kwp = _from_sb["kwp"]
+        pvsyst = _from_sb["pvsyst"]; df_al = _from_sb["df_al"]
+        df_daily = _from_sb["df_daily"]; df_paradas = _from_sb["df_paradas"]
+        df_disp_op = _from_sb["df_disp_op"]; df_poa_dia = _from_sb["df_poa_dia"]
+        disp_op_media = _from_sb["disp_op_media"]; disp_dia_inv = _from_sb["disp_dia_inv"]
+        kpis = _from_sb["kpis"]; kpis_5est = _from_sb["kpis_5est"]
+        poa = _from_sb["poa"]; fonte_poa = _from_sb["fonte_poa"]
+        fonte_energia = _from_sb["fonte_energia"]
+        tem_estacao = _from_sb["tem_estacao"]
+        token = None; ghost_pks = set()
+        glob_inc = float(pvsyst.get("glob_inc") or 0)
+        st.success("⚡ Lido do Supabase em segundos (cache ETL)")
+        # Pular pipeline ISC — ir direto para calculo de alert_dias e charts
+
+    if _from_sb is None:
+        with st.spinner("Buscando dados cadastrais..."):
+            df_cad =sql("SELECT name,nominal_power_kwp,om_contract,contract_end FROM public.plant_plant WHERE id="+str(pid))
+            cad    =df_cad.iloc[0].to_dict() if not df_cad.empty else {}
+            kwp    =float(cad.get("nominal_power_kwp") or 0)
+            df_pv  =load_pvsyst(pid,ano,mes)
+            pvsyst =df_pv.iloc[0].to_dict() if not df_pv.empty else {}
+            if not pvsyst.get("e_grid") and pv_egrid_manual>0:
+                pvsyst["e_grid"]=pv_egrid_manual
+                st.caption("PVsyst E_grid: manual (%.0f kWh)" % pv_egrid_manual)
+            if not pvsyst.get("pr") and pv_pr_manual>0: pvsyst["pr"]=pv_pr_manual
+            if not pvsyst.get("glob_inc") and pv_globinc_manual>0: pvsyst["glob_inc"]=pv_globinc_manual
+            if not pvsyst.get("p50") and pv_p50_manual>0: pvsyst["p50"]=pv_p50_manual
+            if not pvsyst.get("p75") and pv_p75_manual>0: pvsyst["p75"]=pv_p75_manual
+            if not pvsyst: st.warning("PVsyst nao encontrado. Preencha no sidebar.")
+            df_al  =pd.DataFrame() if ps_id_isc else load_alertas(pid,ano,mes)
+
+        # ── Energia (iSolarCloud ou banco) ──
+        fonte_energia="Banco AEVO"; df_daily=pd.DataFrame(); ghost_pks=set()
+        if ps_id_isc:
+            with st.spinner("Conectando ao iSolarCloud..."):
+                token=isc_login()
+            if token:
+                _c_en=_cache_load(ps_id_isc,ano,mes,"energia") if _mes_fechado(ano,mes) else None
+                if _c_en:
+                    df_daily,msg,ghost_pks=_c_en
+                    st.caption("⚡ Energia: cache disco")
+                else:
+                    df_daily,msg,ghost_pks=isc_energia_mensal(ps_id_isc,ano,mes,token)
+                    if not df_daily.empty and _mes_fechado(ano,mes):
+                        _cache_save(ps_id_isc,ano,mes,"energia",(df_daily,msg,ghost_pks))
+                if not df_daily.empty:
+                    fonte_energia="iSolarCloud"
+                    st.success("iSolarCloud: {:,.0f} kWh total".format(df_daily["energia_kwh"].sum()))
+                else:
+                    st.warning("iSolarCloud sem dados ("+msg+"). Usando banco AEVO.")
             else:
-                df_daily,msg,ghost_pks=isc_energia_mensal(ps_id_isc,ano,mes,token)
-                if not df_daily.empty and _mes_fechado(ano,mes):
-                    _cache_save(ps_id_isc,ano,mes,"energia",(df_daily,msg,ghost_pks))
-            if not df_daily.empty:
-                fonte_energia="iSolarCloud"
-                st.success("iSolarCloud: {:,.0f} kWh total".format(df_daily["energia_kwh"].sum()))
+                st.warning("Falha no login iSolarCloud. Usando banco AEVO.")
+        if df_daily.empty:
+            with st.spinner("Buscando energia do banco..."):
+                df_daily=load_inverter_daily_banco(pid,ano,mes)
+
+        if df_daily.empty:
+            st.error("Sem dados de geracao para o periodo."); st.stop()
+
+        # ── POA — cascata de resolucao ──
+        with st.spinner("Buscando POA e disponibilidade operacional..."):
+            glob_inc=float(pvsyst.get("glob_inc") or 0)
+            glob_hor=float(pvsyst.get("glob_hor") or 0)
+            poa_banco,ghi_banco=load_poa_banco(pid,ano,mes)
+            poa,fonte_poa=resolve_poa(poa_manual,poa_banco,glob_inc,glob_hor,ghi_banco)
+            tem_estacao=len(get_ws_ids(pid))>0
+            df_poa_dia=load_poa_diaria(pid,ano,mes) if tem_estacao else pd.DataFrame()
+            kpis_5est=None; disp_dia_inv=None
+            if ps_id_isc and token:
+                _c_5e=_cache_load(ps_id_isc,ano,mes,"5estados") if _mes_fechado(ano,mes) else None
+                if _c_5e:
+                    df_disp_op,df_paradas,disp_op_media,kpis_5est,disp_dia_inv=_c_5e
+                    st.caption("⚡ 5 estados: cache disco")
+                else:
+                    df_disp_op,df_paradas,disp_op_media,kpis_5est,disp_dia_inv=isc_5estados_mensal(ps_id_isc,ano,mes,token,excluir_pks=tuple(sorted(ghost_pks)) if ghost_pks else None)
+                    if _mes_fechado(ano,mes):
+                        _cache_save(ps_id_isc,ano,mes,"5estados",(df_disp_op,df_paradas,disp_op_media,kpis_5est,disp_dia_inv))
             else:
-                st.warning("iSolarCloud sem dados ("+msg+"). Usando banco AEVO.")
-        else:
-            st.warning("Falha no login iSolarCloud. Usando banco AEVO.")
-    if df_daily.empty:
-        with st.spinner("Buscando energia do banco..."):
-            df_daily=load_inverter_daily_banco(pid,ano,mes)
+                df_disp_op,df_paradas,disp_op_media=load_disp_operacao(pid,ano,mes)
 
-    if df_daily.empty:
-        st.error("Sem dados de geracao para o periodo."); st.stop()
+        dias_mes=calendar.monthrange(ano,mes)[1]
+        kpis=calc_kpis(df_daily,dias_mes,kwp,poa,pvsyst,df_disp_op)
+        glob_inc_dia=glob_inc/dias_mes if (glob_inc and dias_mes) else 0
 
-    # â\x94\x80â\x94\x80 POA — cascata de resolucao â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80
-    with st.spinner("Buscando POA e disponibilidade operacional..."):
-        glob_inc=float(pvsyst.get("glob_inc") or 0)
-        glob_hor=float(pvsyst.get("glob_hor") or 0)
-        # Buscar POA e GHI do banco
-        poa_banco,ghi_banco=load_poa_banco(pid,ano,mes)
-        # Cascata
-        poa,fonte_poa=resolve_poa(poa_manual,poa_banco,glob_inc,glob_hor,ghi_banco)
-        # POA diario para grafico
-        tem_estacao=len(get_ws_ids(pid))>0
-        df_poa_dia=load_poa_diaria(pid,ano,mes) if tem_estacao else pd.DataFrame()
-        # Disponibilidade
-        kpis_5est=None; disp_dia_inv=None
-        if ps_id_isc and token:
-            _c_5e=_cache_load(ps_id_isc,ano,mes,"5estados") if _mes_fechado(ano,mes) else None
-            if _c_5e:
-                df_disp_op,df_paradas,disp_op_media,kpis_5est,disp_dia_inv=_c_5e
-                st.caption("⚡ 5 estados: cache disco")
-            else:
-                df_disp_op,df_paradas,disp_op_media,kpis_5est,disp_dia_inv=isc_5estados_mensal(ps_id_isc,ano,mes,token,excluir_pks=tuple(sorted(ghost_pks)) if ghost_pks else None)
-                if _mes_fechado(ano,mes):
-                    _cache_save(ps_id_isc,ano,mes,"5estados",(df_disp_op,df_paradas,disp_op_media,kpis_5est,disp_dia_inv))
-        else:
-            df_disp_op,df_paradas,disp_op_media=load_disp_operacao(pid,ano,mes)
-
-    dias_mes=calendar.monthrange(ano,mes)[1]
-    kpis=calc_kpis(df_daily,dias_mes,kwp,poa,pvsyst,df_disp_op)
-    glob_inc_dia=glob_inc/dias_mes if (glob_inc and dias_mes) else 0
+    else:
+        # Caminho Supabase: variaveis ja populadas, so calcular dias_mes e glob_inc_dia
+        dias_mes=calendar.monthrange(ano,mes)[1]
+        glob_inc_dia=glob_inc/dias_mes if (glob_inc and dias_mes) else 0
 
     # Compute alert_dias via inverter consistency
     alert_dias=[]
