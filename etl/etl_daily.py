@@ -65,23 +65,34 @@ import calendar  # noqa: E402
 
 # ── Carrega .env ─────────────────────────────────────────────────────────
 def load_env(path):
+    """Carrega vars de .env e tambem expoe via os.environ (fallback).
+    Prioridade: os.environ > .env"""
     env = {}
-    if not os.path.exists(path): return env
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line: continue
-            k, v = line.split("=", 1)
-            env[k.strip()] = v.strip()
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line: continue
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+    # Sobrescreve/adiciona com os.environ (Github Actions, Railway, etc)
+    for k in ("SUPABASE_HOST","SUPABASE_PORT","SUPABASE_DB","SUPABASE_USER",
+              "SUPABASE_PASSWORD","SUPABASE_REGION",
+              "AEVO_HOST","AEVO_PORT","AEVO_DB","AEVO_USER","AEVO_PASSWORD",
+              "ISC_USER","ISC_PASS","ISC_APPKEY","ISC_SECRET"):
+        if os.environ.get(k): env[k] = os.environ[k]
     return env
 
 ENV = load_env(os.path.join(ROOT, ".env"))
+if "SUPABASE_HOST" not in ENV:
+    print("ERRO: SUPABASE_HOST nao definido (nem em .env nem em os.environ)")
+    sys.exit(2)
 REGION = ENV.get("SUPABASE_REGION", "us-east-1")
 PROJECT_REF = ENV["SUPABASE_HOST"].split(".")[1]
 SB_CONN = dict(
     host=f"aws-1-{REGION}.pooler.supabase.com",
     port=5432,
-    dbname=ENV["SUPABASE_DB"],
+    dbname=ENV.get("SUPABASE_DB", "postgres"),
     user=f"postgres.{PROJECT_REF}",
     password=ENV["SUPABASE_PASSWORD"],
     sslmode="require",
