@@ -1,8 +1,13 @@
 """Lookup unificado de variaveis sensiveis.
 Ordem de prioridade:
-  1. st.secrets (Streamlit Cloud)
-  2. os.environ (Railway, GitHub Actions)
-  3. arquivo .env (desenvolvimento local)
+  1. os.environ (Railway, Render, GitHub Actions, Streamlit Cloud via env vars)
+  2. arquivo .env (desenvolvimento local)
+
+NOTA: nao usamos st.secrets aqui porque sua chamada ativa o runtime
+Streamlit antes do st.set_page_config (causa StreamlitSetPageConfigMustBeFirstCommandError).
+No Streamlit Cloud, definir as variaveis no [secrets] mapeia para os.environ tambem,
+entao o suporte fica via env vars somente.
+
 Uso:
     import _env
     senha = _env.get("SUPABASE_PASSWORD")
@@ -27,19 +32,8 @@ def _read_file():
     return cache
 
 
-def _try_st_secrets(key):
-    try:
-        import streamlit as st
-        # Streamlit retorna AttributeError se a key nao existir
-        return st.secrets[key]
-    except Exception:
-        return None
-
-
 def get(key, default=None):
-    """Le secret de st.secrets > os.environ > .env. Retorna default se nada."""
-    v = _try_st_secrets(key)
-    if v is not None: return v
+    """Le secret de os.environ > .env. Retorna default se nao achar."""
     v = os.environ.get(key)
     if v is not None: return v
     return _read_file().get(key, default)
