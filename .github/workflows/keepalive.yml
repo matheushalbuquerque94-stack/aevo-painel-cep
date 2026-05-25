@@ -1,0 +1,21 @@
+name: Keep Render Awake
+
+# Pinga a URL a cada 10min, 08-21h BRT, dias uteis
+# Evita que o Render Free tier durma e o usuario perca sessao Streamlit.
+on:
+  schedule:
+    # GitHub Actions usa UTC. BRT = UTC-3.
+    # 08:00-21:00 BRT = 11:00-00:00 UTC
+    # Cada 10min nas horas relevantes
+    - cron: "*/10 11-23 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping app principal
+        run: |
+          curl -s -o /dev/null -w "HTTP %{http_code} | %{time_total}s\n" \
+            https://aevo-painel-cep.onrender.com/_stcore/health
