@@ -3,6 +3,7 @@ headless = true
 runOnSave = false
 enableCORS = false
 enableXsrfProtection = false
+enableWebsocketCompression = false
 maxUploadSize = 50
 
 [browser]
