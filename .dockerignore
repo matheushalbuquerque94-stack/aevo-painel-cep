@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.git/
+.github/
+.gitignore
+BACKUP/
+cache/
+__pycache__/
+*.pyc
+*.zip
+.streamlit/secrets.toml
+.vscode/
+.idea/
+_diag_*
+_test_*
+_repro_*
