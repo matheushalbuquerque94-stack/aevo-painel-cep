@@ -33,7 +33,7 @@ class _FakeSt:
         return lambda f: f
     cache_resource = cache_data
     def set_page_config(self, *a, **kw): pass
-    def stop(self): raise SystemExit("st.stop()")
+    def stop(self): pass  # nao parar (auth.ensure_login chama isso no import)
     def columns(self, spec, **kw):
         n = spec if isinstance(spec, int) else len(spec)
         return tuple(_FakeCtx() for _ in range(n))
