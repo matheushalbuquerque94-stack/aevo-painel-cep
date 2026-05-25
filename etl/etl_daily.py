@@ -274,15 +274,32 @@ def processar_usina(conn, pid, ano, mes, triggered_by="manual", force=False):
                   time.time()-t0, "sem ISC mapping", triggered_by)
         conn.commit()
         return ("SKIP", "sem ISC mapping", 0, 0, 0)
-    # Timeout por planta para evitar travamento em chamadas ISC lentas
+    # Timeout por planta + retry (rate limit ISC pode causar resposta vazia)
     import threading
     result_box = {"data": None, "error": None}
-    def _coletar():
-        try: result_box["data"] = app.coletar_dados_usina(pid, ano, mes)
-        except Exception as e: result_box["error"] = e
-    th = threading.Thread(target=_coletar, daemon=True)
-    th.start()
-    th.join(timeout=300)  # 5 min por planta (api ISC pode demorar muito)
+    MAX_RETRIES = 3
+    RETRY_BACKOFF_S = [15, 45, 120]  # espera entre retries
+    for attempt in range(MAX_RETRIES):
+        result_box = {"data": None, "error": None}
+        def _coletar():
+            try: result_box["data"] = app.coletar_dados_usina(pid, ano, mes)
+            except Exception as e: result_box["error"] = e
+        th = threading.Thread(target=_coletar, daemon=True)
+        th.start()
+        th.join(timeout=300)
+        # Sucesso: data nao-vazio e sem erro
+        data = result_box.get("data")
+        err = result_box.get("error")
+        # Considera "ISC vazio" como falha que merece retry
+        isc_empty = (data and not data.get("error") and
+                     "ISC sem dados" in " ".join(data.get("notes",[])))
+        if data and not err and not isc_empty:
+            break  # sucesso
+        # Falha — espera e tenta de novo
+        if attempt < MAX_RETRIES - 1:
+            wait = RETRY_BACKOFF_S[attempt]
+            print(f"    retry {attempt+2}/{MAX_RETRIES} em {wait}s (motivo: {'isc_vazio' if isc_empty else (str(err)[:40] if err else 'timeout')})")
+            time.sleep(wait)
     if th.is_alive():
         duration = time.time() - t0
         log_fetch(conn, pid, ano, mes, "n/a", "FAIL", 0, 0, 0, duration,
