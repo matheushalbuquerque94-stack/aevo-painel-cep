@@ -1,0 +1,48 @@
+# Render Blueprint — descreve toda a infra
+# Uso: dashboard Render -> New + -> Blueprint -> escolhe este repo
+# Render le este arquivo e cria os servicos automaticamente.
+
+services:
+  - type: web
+    name: aevo-painel-cep
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      # Valores publicos — definidos no proprio yaml
+      - key: SUPABASE_HOST
+        value: db.zaqeviptywgrnhrtmfmh.supabase.co
+      - key: SUPABASE_PORT
+        value: "5432"
+      - key: SUPABASE_DB
+        value: postgres
+      - key: SUPABASE_USER
+        value: postgres
+      - key: SUPABASE_REGION
+        value: us-east-1
+      - key: AEVO_HOST
+        value: shinkansen.proxy.rlwy.net
+      - key: AEVO_PORT
+        value: "18796"
+      - key: AEVO_DB
+        value: railway
+      - key: AEVO_USER
+        value: powerbi_readonly_user
+      - key: ISC_USER
+        value: service@aevoservice.com.br
+      - key: ISC_APPKEY
+        value: C7F86D8BAD458C1AC1E41C36F013E1E1
+      - key: ISC_SECRET
+        value: dzv6fax07b6zu03vdsa5xfuy962va24z
+      - key: TZ
+        value: America/Sao_Paulo
+      # Segredos — Render vai pedir voce preencher no primeiro deploy
+      - key: SUPABASE_PASSWORD
+        sync: false
+      - key: AEVO_PASSWORD
+        sync: false
+      - key: ISC_PASS
+        sync: false
