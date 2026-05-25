@@ -7,6 +7,7 @@ import psycopg2
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+import _env as _env_module
 
 # Auth — mesma do app principal
 try:
@@ -21,46 +22,29 @@ st.set_page_config(page_title="Painel Portfolio — AEVO19", page_icon="📊", l
 # ── Conexao Supabase ─────────────────────────────────────────────────────
 @st.cache_resource
 def _sb_conn():
-    """Conexao reutilizada com Supabase (pooler)."""
-    env = {}
-    p = os.path.join(ROOT, ".env")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1); env[k.strip()] = v.strip()
-    for k in ("SUPABASE_HOST","SUPABASE_PASSWORD","SUPABASE_REGION","SUPABASE_DB"):
-        if k not in env and os.environ.get(k): env[k] = os.environ[k]
-    if "SUPABASE_HOST" not in env:
-        st.error("SUPABASE_HOST nao definido."); st.stop()
-    ref = env["SUPABASE_HOST"].split(".")[1]
-    region = env.get("SUPABASE_REGION", "us-east-1")
+    host = _env_module.get("SUPABASE_HOST")
+    password = _env_module.get("SUPABASE_PASSWORD")
+    if not host or not password:
+        st.error("SUPABASE_HOST/PASSWORD nao definidos."); st.stop()
+    ref = host.split(".")[1]
+    region = _env_module.get("SUPABASE_REGION", "us-east-1")
     return psycopg2.connect(
         host=f"aws-1-{region}.pooler.supabase.com", port=5432,
-        dbname=env.get("SUPABASE_DB","postgres"),
-        user=f"postgres.{ref}", password=env["SUPABASE_PASSWORD"],
+        dbname=_env_module.get("SUPABASE_DB","postgres"),
+        user=f"postgres.{ref}", password=password,
         sslmode="require", connect_timeout=15
     )
 
 @st.cache_resource
 def _aevo_conn():
-    env = {}
-    p = os.path.join(ROOT, ".env")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1); env[k.strip()] = v.strip()
-    for k in ("AEVO_HOST","AEVO_PORT","AEVO_DB","AEVO_USER","AEVO_PASSWORD"):
-        if k not in env and os.environ.get(k): env[k] = os.environ[k]
-    if "AEVO_HOST" not in env:
+    host = _env_module.get("AEVO_HOST")
+    if not host:
         st.error("AEVO_HOST nao definido."); st.stop()
     return psycopg2.connect(
-        host=env["AEVO_HOST"], port=int(env.get("AEVO_PORT", "18796")),
-        dbname=env.get("AEVO_DB","railway"),
-        user=env["AEVO_USER"], password=env["AEVO_PASSWORD"]
+        host=host, port=int(_env_module.get("AEVO_PORT","18796")),
+        dbname=_env_module.get("AEVO_DB","railway"),
+        user=_env_module.get("AEVO_USER","powerbi_readonly_user"),
+        password=_env_module.get("AEVO_PASSWORD","")
     )
 
 

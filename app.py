@@ -47,11 +47,12 @@ def _ensure_chartjs():
         except:
             _CHARTJS_CODE = "/* CHART.JS FAILED */"
 
+import _env as _env_module
 ISC_BASE   = "https://gateway.isolarcloud.com.hk/openapi"
-ISC_APPKEY = "C7F86D8BAD458C1AC1E41C36F013E1E1"
-ISC_SECRET = "dzv6fax07b6zu03vdsa5xfuy962va24z"
-ISC_USER   = "service@aevoservice.com.br"
-ISC_PASS   = "Aevo#123"
+ISC_APPKEY = _env_module.get("ISC_APPKEY", "C7F86D8BAD458C1AC1E41C36F013E1E1")
+ISC_SECRET = _env_module.get("ISC_SECRET", "dzv6fax07b6zu03vdsa5xfuy962va24z")
+ISC_USER   = _env_module.get("ISC_USER", "service@aevoservice.com.br")
+ISC_PASS   = _env_module.get("ISC_PASS", "")
 ISC_RSA    = ("MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCfZcK8eOx6FL3BUe8BLnDdHxst"
               "YNOid5vboZarD2T-f4wxSyd1JBWGspE6XsjuX78EFAsgtN-QQK6RFs8KrfDCMVUxQ"
               "BotK3INjdBfis076AujjEv0lIuJv2agQOm_1PxuiqeXSkEAUg05bEsueaVOtPDKSp"
@@ -489,8 +490,12 @@ def isc_5estados_mensal(ps_id, ano, mes, token, excluir_pks=None):
 
 # â\x94\x80â\x94\x80 Banco â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80
 def get_conn():
-    return psycopg2.connect(host="shinkansen.proxy.rlwy.net",port=18796,
-        dbname="railway",user="powerbi_readonly_user",password="Rogin@Aevo123")
+    return psycopg2.connect(
+        host=_env_module.get("AEVO_HOST","shinkansen.proxy.rlwy.net"),
+        port=int(_env_module.get("AEVO_PORT","18796")),
+        dbname=_env_module.get("AEVO_DB","railway"),
+        user=_env_module.get("AEVO_USER","powerbi_readonly_user"),
+        password=_env_module.get("AEVO_PASSWORD",""))
 
 def sql(q):
     conn=get_conn(); df=pd.read_sql(q,conn); conn.close(); return df
@@ -1652,29 +1657,21 @@ def htmls_para_pdfs_batch(htmls, progress_cb=None):
 # ── Supabase (cache persistente populado pelo ETL) ───────────────────────
 _SB_CONN_KW = None
 def _sb_load_env():
-    """Carrega credenciais Supabase do .env (uma vez)."""
+    """Carrega credenciais Supabase (st.secrets > env vars > .env)."""
     global _SB_CONN_KW
     if _SB_CONN_KW is not None: return _SB_CONN_KW
-    here = os.path.dirname(os.path.abspath(__file__))
-    env_path = os.path.join(here, ".env")
-    if not os.path.exists(env_path):
+    host = _env_module.get("SUPABASE_HOST")
+    password = _env_module.get("SUPABASE_PASSWORD")
+    if not host or not password:
         _SB_CONN_KW = {}
         return _SB_CONN_KW
-    env = {}
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1); env[k.strip()] = v.strip()
-    if "SUPABASE_HOST" not in env or "SUPABASE_PASSWORD" not in env:
-        _SB_CONN_KW = {}
-        return _SB_CONN_KW
-    ref = env["SUPABASE_HOST"].split(".")[1]
-    region = env.get("SUPABASE_REGION", "us-east-1")
+    ref = host.split(".")[1]
+    region = _env_module.get("SUPABASE_REGION", "us-east-1")
     _SB_CONN_KW = dict(
         host=f"aws-1-{region}.pooler.supabase.com", port=5432,
-        dbname=env["SUPABASE_DB"], user=f"postgres.{ref}",
-        password=env["SUPABASE_PASSWORD"], sslmode="require", connect_timeout=10,
+        dbname=_env_module.get("SUPABASE_DB","postgres"),
+        user=f"postgres.{ref}", password=password,
+        sslmode="require", connect_timeout=10,
     )
     return _SB_CONN_KW
 

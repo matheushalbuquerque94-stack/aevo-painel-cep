@@ -1,0 +1,63 @@
+name: ETL Diario (AEVO -> Supabase)
+
+# Executa todo dia as 02:00 BRT (05:00 UTC)
+# Tambem permite rodar manualmente via aba Actions -> Run workflow
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      ano:
+        description: "Ano (deixe vazio para mes atual)"
+        required: false
+      mes:
+        description: "Mes 1-12 (deixe vazio para mes atual)"
+        required: false
+      force:
+        description: "Forcar recompute (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: |
+          pip install --upgrade pip
+          pip install psycopg2-binary pandas requests pycryptodome pytz nest-asyncio bcrypt
+
+      - name: Run ETL
+        env:
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
+          SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
+          SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
+          SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
+          SUPABASE_REGION: ${{ secrets.SUPABASE_REGION }}
+          AEVO_HOST: ${{ secrets.AEVO_HOST }}
+          AEVO_PORT: ${{ secrets.AEVO_PORT }}
+          AEVO_DB: ${{ secrets.AEVO_DB }}
+          AEVO_USER: ${{ secrets.AEVO_USER }}
+          AEVO_PASSWORD: ${{ secrets.AEVO_PASSWORD }}
+          ETL_MONTHS_BACK: "1"
+          TZ: "America/Sao_Paulo"
+        run: |
+          if [ -n "${{ inputs.ano }}" ] && [ -n "${{ inputs.mes }}" ]; then
+            FORCE_FLAG=""
+            if [ "${{ inputs.force }}" = "true" ]; then FORCE_FLAG="--force"; fi
+            python etl/etl_daily.py --plant all --ano ${{ inputs.ano }} --mes ${{ inputs.mes }} $FORCE_FLAG
+          else
+            python etl/cron_runner.py
+          fi

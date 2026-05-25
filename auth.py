@@ -14,36 +14,21 @@ import os, sys, getpass
 
 # Conexao Supabase: reusa _sb_connect do app se importado em runtime; CLI usa propria
 _HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def _load_env():
-    env = {}
-    p = os.path.join(_HERE, ".env")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    env[k.strip()] = v.strip()
-    # Fallback: variaveis de ambiente (Railway define via dashboard)
-    for k in ("SUPABASE_HOST", "SUPABASE_PORT", "SUPABASE_DB", "SUPABASE_USER",
-              "SUPABASE_PASSWORD", "SUPABASE_REGION"):
-        if k not in env and os.environ.get(k):
-            env[k] = os.environ[k]
-    return env
+sys.path.insert(0, _HERE)
+import _env as _env_module
 
 
 def _connect():
     import psycopg2
-    env = _load_env()
-    if "SUPABASE_HOST" not in env: return None
-    ref = env["SUPABASE_HOST"].split(".")[1]
-    region = env.get("SUPABASE_REGION", "us-east-1")
+    host = _env_module.get("SUPABASE_HOST")
+    password = _env_module.get("SUPABASE_PASSWORD")
+    if not host or not password: return None
+    ref = host.split(".")[1]
+    region = _env_module.get("SUPABASE_REGION", "us-east-1")
     return psycopg2.connect(
         host=f"aws-1-{region}.pooler.supabase.com", port=5432,
-        dbname=env.get("SUPABASE_DB", "postgres"),
-        user=f"postgres.{ref}", password=env["SUPABASE_PASSWORD"],
+        dbname=_env_module.get("SUPABASE_DB", "postgres"),
+        user=f"postgres.{ref}", password=password,
         sslmode="require", connect_timeout=10,
     )
 
