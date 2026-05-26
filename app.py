@@ -1360,7 +1360,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<div class="tech-item"><div class="th">Fórmula do PR</div>'
                 '<div class="tx" data-tech="pr_formula">'+pr_formula+' = '+pr_s+'</div></div>'
               '<div class="tech-item"><div class="th">Fonte POA</div>'
-                '<div class="tx" contenteditable="true">'+fonte_poa+'</div></div>'
+                '<div class="tx" data-tech="fonte_poa">'+fonte_poa+'</div></div>'
             '</div>'
           '</div>'
           '<div class="chart-small">'
@@ -1368,8 +1368,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
             '<div style="height:60px;position:relative"><canvas id="ch_dev"></canvas></div>'
           '</div>'
           '<div class="callout">'
-            '<div class="ct" contenteditable="true">Análise do time</div>'
-            '<div class="cb" contenteditable="true" spellcheck="false">Edite aqui a análise do período operacional.</div>'
+            '<div class="ct" contenteditable="true">Análise automática · Desempenho</div>'
+            '<div class="cb" data-analysis="page1" contenteditable="true" spellcheck="false">Aguardando dados...</div>'
           '</div>'
         '</div>'
       '</div>'+ft("2/"+total_pags)+'</div>')
@@ -1434,8 +1434,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<div class="bh-val" contenteditable="true">'+str(d_b10)+' dias ('+str(pct_d(d_b10))+'%)</div></div>'
           '</div>'
           +anomalia_html+
-          '<div class="callout"><div class="ct" contenteditable="true">Análise do time</div>'
-            '<div class="cb" contenteditable="true" spellcheck="false">Edite aqui a análise diária do período.</div>'
+          '<div class="callout"><div class="ct" contenteditable="true">Análise automática · Geração diária</div>'
+            '<div class="cb" data-analysis="page2" contenteditable="true" spellcheck="false">Aguardando dados...</div>'
           '</div>'
         '</div>'
       '</div>'+ft("3/"+total_pags)+'</div>')
@@ -1472,8 +1472,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
             +rank_rows+
             '<div style="font-size:7px;color:#6B7C8F;margin-top:4px" contenteditable="true">Vermelho: desvio &gt;15% vs melhor do grupo</div>'
           '</div>'
-          '<div class="insight"><div class="ct" contenteditable="true">Análise do time</div>'
-            '<div class="cb" contenteditable="true" spellcheck="false">Edite aqui a análise dos equipamentos.</div>'
+          '<div class="insight"><div class="ct" contenteditable="true">Análise automática · Equipamentos</div>'
+            '<div class="cb" data-analysis="page3" contenteditable="true" spellcheck="false">Aguardando dados...</div>'
           '</div>'
         '</div>'
       '</div>'+ft("4/"+total_pags)+'</div>')
@@ -1560,8 +1560,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<div class="panel"><div class="panel-title">Distribuição horária das ocorrências</div>'
                 '<div style="font-size:7.5px;font-weight:700;color:#555;margin-bottom:4px">Paradas parciais</div>'+dist_par_html+
                 '<div style="font-size:7.5px;font-weight:700;color:#555;margin:6px 0 4px;padding-top:5px;border-top:1px solid #ECF1F5">Alertas</div>'+dist_al_html+'</div>'
-              '<div class="callout"><div class="ct">Análise do time</div>'
-                '<div class="cb" contenteditable="true" spellcheck="false">Edite aqui.</div></div>'
+              '<div class="callout"><div class="ct">Análise automática · Ocorrências</div>'
+                '<div class="cb" data-analysis="page5" contenteditable="true" spellcheck="false">Aguardando dados...</div></div>'
             '</div>'
           '</div>'+ft("5/"+total_pags)+'</div>')
     # PAG 6 — Tabela de Ocorrências (Tier 1) ou skip (Tier 2)
@@ -1592,8 +1592,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
                       '<div class="stat2"><div class="lbl">Em aberto</div><div class="val" style="color:#6B7C8F">'+str(em_aberto)+'</div></div>'
                       '<div class="stat2"><div class="lbl">Total horas off</div><div class="val">'+fmt_n(total_h,2)+' h</div></div>'
                     '</div></div>'
-                  '<div class="callout"><div class="ct" contenteditable="true">Análise do time</div>'
-                    '<div class="cb" contenteditable="true" spellcheck="false">Edite aqui a análise das ocorrências.</div></div>'
+                  '<div class="callout"><div class="ct" contenteditable="true">Análise automática · Tabela de eventos</div>'
+                    '<div class="cb" data-analysis="page6" contenteditable="true" spellcheck="false">Aguardando dados...</div></div>'
                 '</div>')
             cont_lbl = " (cont.)" if tp > 0 else ""
             layout = "col-l16" if side_panel else "fcol"

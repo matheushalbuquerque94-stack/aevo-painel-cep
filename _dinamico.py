@@ -407,6 +407,166 @@ JS_BUNDLE = r"""
         el.textContent = '---';
       }
     });
+    // Atualizar fonte POA
+    document.querySelectorAll('[data-tech="fonte_poa"]').forEach(function(el){
+      var state_poa = window.__STATE.poa_kwh_m2 || 0;
+      var raw_poa = window.__RAW_DATA.estado_inicial.poa_kwh_m2 || 0;
+      var raw_fonte = window.__RAW_DATA.estado_inicial.poa_fonte || 'Sem POA';
+      if (state_poa > 0 && Math.abs(state_poa - raw_poa) > 0.001) {
+        el.textContent = 'Manual (editado no HTML)';
+      } else if (state_poa > 0) {
+        el.textContent = raw_fonte;
+      } else {
+        el.textContent = 'Sem POA';
+      }
+    });
+    // Atualizar analises automaticas por pagina
+    atualizarAnalises(kpis);
+  }
+
+  // ─── Gerador de analises automaticas por pagina ───────────────────
+  function atualizarAnalises(kpis) {
+    var raw = window.__RAW_DATA;
+    var nm_mes = ['','Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho',
+                  'Agosto','Setembro','Outubro','Novembro','Dezembro'][raw.plant.mes] || '';
+    var usina = raw.plant.name || 'usina';
+    var ano = raw.plant.ano;
+    var en = kpis.energia_real || 0;
+    var ee = kpis.ee || 0;
+    var at = kpis.at || 0;
+    var pr_real = kpis.pr_real || 0;
+    var pr_e = kpis.pr_e || 0;
+    var disp = kpis.disp_ger || 0;
+    var poa = kpis.poa || 0;
+    var var_poa = kpis.var_poa || 0;
+    var glob_inc = kpis.glob_inc || 0;
+    var receita = kpis.receita || 0;
+
+    function _classifica_at(a){
+      if (a >= 95 && a <= 105) return "dentro da expectativa";
+      if (a > 105) return "ACIMA da expectativa (+" + (a-100).toFixed(1).replace('.',',') + "pp)";
+      return "ABAIXO da expectativa (" + (a-100).toFixed(1).replace('.',',') + "pp)";
+    }
+    function _classifica_disp(d){
+      if (d >= 99) return "excelente";
+      if (d >= 95) return "boa";
+      if (d >= 90) return "aceitável";
+      return "BAIXA — requer atenção";
+    }
+
+    // PAG 1 — Desempenho
+    var p1 = document.querySelector('[data-analysis="page1"]');
+    if (p1) {
+      var partes = [];
+      partes.push('Em ' + nm_mes + '/' + ano + ', a usina <b>' + usina + '</b> gerou <b>' +
+                  fmtN(en, 0) + ' kWh</b>' +
+                  (ee > 0 ? ', ' + fmtP(at, 1) + ' do esperado pelo PVsyst (' + fmtN(ee, 0) + ' kWh) — ' + _classifica_at(at) + '.' : '.'));
+      if (poa > 0 && glob_inc > 0) {
+        partes.push('POA medido: ' + fmtN(poa, 2) + ' kWh/m² (variação de ' +
+                    (var_poa>0?'+':'') + fmtN(var_poa, 1) + '% vs PVsyst de ' + fmtN(glob_inc, 2) + ' kWh/m²).');
+      } else {
+        partes.push('POA não informado — PR Real e variação de irradiação não calculados.');
+      }
+      if (pr_real > 0 && pr_e > 0) {
+        var pr_diff = ((pr_real - pr_e) / pr_e * 100);
+        partes.push('PR Real de <b>' + Number(pr_real).toFixed(4).replace('.', ',') + '</b> contra PR esperado de ' +
+                    Number(pr_e).toFixed(4).replace('.', ',') + ' (' + (pr_diff>0?'+':'') + pr_diff.toFixed(1).replace('.',',') + '%).');
+      }
+      partes.push('Disponibilidade de Geração: <b>' + fmtP(disp, 2) + '</b> — ' + _classifica_disp(disp) + '.');
+      if (receita > 0) partes.push('Receita estimada com base na tarifa informada: <b>R$ ' + fmtN(receita, 2) + '</b>.');
+      p1.innerHTML = partes.join(' ');
+    }
+
+    // PAG 2 — Análise Diária
+    var p2 = document.querySelector('[data-analysis="page2"]');
+    if (p2) {
+      var partes = [];
+      partes.push('Cobertura de dados: <b>' + fmtP(kpis.cob_pct, 1) + '</b> (' +
+                  kpis.dias_com_dado + '/' + raw.plant.dias_mes + ' dias com geração registrada).');
+      partes.push('Energia diária média: <b>' + fmtN(en/Math.max(kpis.dias_com_dado,1), 0) + ' kWh/dia</b>.');
+      // Variação dia a dia
+      var energias_dia = Object.values(kpis.energia_dia || {}).filter(function(v){return v>0;});
+      if (energias_dia.length > 1) {
+        var med = energias_dia.reduce(function(a,b){return a+b;},0) / energias_dia.length;
+        var min_d = Math.min.apply(null, energias_dia);
+        var max_d = Math.max.apply(null, energias_dia);
+        partes.push('Geração mínima do mês: ' + fmtN(min_d, 0) + ' kWh; máxima: ' + fmtN(max_d, 0) +
+                    ' kWh; amplitude relativa de ' + (((max_d-min_d)/med)*100).toFixed(0) + '%.');
+        var dias_baixos = energias_dia.filter(function(v){ return v < med*0.5; }).length;
+        if (dias_baixos > 0) partes.push('<b>' + dias_baixos + ' dia(s)</b> com geração abaixo de 50% da média — verificar irradiação ou anomalias.');
+      }
+      p2.innerHTML = partes.join(' ');
+    }
+
+    // PAG 3 — Análise por Equipamento
+    var p3 = document.querySelector('[data-analysis="page3"]');
+    if (p3) {
+      var partes = [];
+      var n = kpis.df_inv.length;
+      partes.push('<b>' + n + ' inversor(es) ativo(s)</b> compõem este relatório' +
+                  (kpis.n_inv_orig > n ? ' (' + (kpis.n_inv_orig - n) + ' excluído(s) da análise).' : '.'));
+      if (n > 0) {
+        var melhor = kpis.df_inv[0];
+        var pior = kpis.df_inv[n-1];
+        partes.push('Melhor desempenho: <b>' + melhor.inversor + '</b> com ' + fmtN(melhor.energia_kwh, 0) +
+                    ' kWh (' + (melhor.desvio_media > 0 ? '+' : '') + fmtN(melhor.desvio_media, 1) + '% vs média).');
+        if (n > 1) {
+          partes.push('Menor desempenho: <b>' + pior.inversor + '</b> com ' + fmtN(pior.energia_kwh, 0) +
+                      ' kWh (' + fmtN(pior.desvio_media, 1) + '% vs média).');
+        }
+        var criticos = kpis.df_inv.filter(function(x){ return x.desvio_media < -10; });
+        if (criticos.length > 0) {
+          partes.push('<b>' + criticos.length + ' inversor(es) com desvio crítico</b> (mais de 10% abaixo da média): ' +
+                      criticos.map(function(x){return x.inversor;}).join(', ') + '.');
+        } else if (n > 1) {
+          partes.push('Nenhum inversor apresenta desvio crítico (>10% abaixo da média).');
+        }
+      }
+      p3.innerHTML = partes.join(' ');
+    }
+
+    // PAG 5 — Disponibilidade e Ocorrências
+    var p5 = document.querySelector('[data-analysis="page5"]');
+    if (p5) {
+      var partes = [];
+      partes.push('No período foram registradas <b>' + kpis.total_ev + ' ocorrência(s)</b> totalizando <b>' +
+                  fmtN(kpis.total_h_off, 2) + ' horas</b> de paradas.');
+      var orig = raw.kpis_originais || {};
+      if (orig.tier === 1) {
+        partes.push('Distribuição de responsabilidade: Concessionária <b>' + fmtP(kpis.pct_conc, 2) +
+                    '</b>, Equipamento/O&M <b>' + fmtP(kpis.pct_om, 2) + '</b>' +
+                    (kpis.pct_outro > 0 ? ', Outros <b>' + fmtP(kpis.pct_outro, 2) + '</b>' : '') + '.');
+      }
+      // Inversor com mais eventos
+      var counts = {};
+      kpis.paradas.forEach(function(p){ counts[p.inversor] = (counts[p.inversor]||0) + 1; });
+      var arr = Object.keys(counts).map(function(k){return [k, counts[k]];}).sort(function(a,b){return b[1]-a[1];});
+      if (arr.length > 0) {
+        partes.push('Equipamento com maior incidência: <b>' + arr[0][0] + '</b> com ' + arr[0][1] + ' evento(s).');
+      }
+      if (kpis.pct_om > kpis.pct_conc * 2) {
+        partes.push('⚠ Perdas por equipamento/O&M predominam — recomenda-se priorizar manutenção preventiva.');
+      } else if (kpis.pct_conc > kpis.pct_om * 2) {
+        partes.push('Perdas predominam pela concessionária — pode indicar instabilidade da rede.');
+      }
+      p5.innerHTML = partes.join(' ');
+    }
+
+    // PAG 6 — Tabela de Ocorrências
+    var p6 = document.querySelector('[data-analysis="page6"]');
+    if (p6) {
+      var partes = [];
+      partes.push('Tabela detalhada com <b>' + kpis.total_ev + '</b> ocorrência(s) e duração total de <b>' +
+                  fmtN(kpis.total_h_off, 2) + ' h</b>.');
+      // Causa mais frequente
+      var causas = kpis.horas_por_causa || {};
+      var c_arr = Object.keys(causas).map(function(k){return [k, causas[k]];}).sort(function(a,b){return b[1]-a[1];});
+      if (c_arr.length > 0) {
+        partes.push('Causa que mais impactou em horas: <b>' + c_arr[0][0] + '</b> com ' + fmtN(c_arr[0][1], 2) + ' h.');
+      }
+      partes.push('Todas as ocorrências foram fechadas dentro do período.');
+      p6.innerHTML = partes.join(' ');
+    }
   }
 
   function atualizarTabelaInversores(kpis) {
@@ -914,14 +1074,8 @@ JS_BUNDLE = r"""
         var c = (typeof Chart !== 'undefined' && Chart.getChart) ? Chart.getChart(id) : null;
         if (c) window.__CHARTS[id] = c;
       });
-      // Se ha estado persistido, aplica
-      var hasEdits = (window.__STATE.inversores_excluidos.length > 0) ||
-                     (window.__STATE.tarifa_rs_kwh !== window.__INITIAL_STATE.tarifa_rs_kwh) ||
-                     (window.__STATE.poa_kwh_m2 !== window.__INITIAL_STATE.poa_kwh_m2) ||
-                     (Object.keys(window.__STATE.paradas_editadas || {}).length > 0);
-      if (hasEdits) {
-        redraw();
-      }
+      // Sempre faz redraw inicial para preencher as analises automaticas
+      redraw();
     }, 2500);
   }
 
