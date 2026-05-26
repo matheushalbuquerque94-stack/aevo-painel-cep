@@ -106,41 +106,26 @@ JS_CALC = r"""
     var receita = energia_real * tarifa;
 
     // ── 5 estados ──
-    // ATENCAO: pct_geracao do tier 1 vem de classificacao 5min do ISC (~10k intervalos).
-    // Recalcular fielmente no client exigiria embedar todos os intervalos no HTML.
-    // Estrategia: usar valores ORIGINAIS do Python como baseline.
-    // - Edicao de causa/responsavel afeta apenas tabela/histograma de horas por causa
-    //   (pct_geracao NAO muda — o tempo em estado GER nao depende de como classificamos
-    //    a causa de uma parada).
-    // - Exclusao de inversor: ajusta pct_geracao proporcionalmente pela energia.
+    // pct_geracao do tier 1 vem de classificacao 5min do ISC. Recalcular fielmente
+    // no client exigiria embedar todos os intervalos. Estrategia:
+    //
+    // 1. Sem exclusoes: usa o valor original do Python (match exato)
+    // 2. Exclusao de inversor: subtrai as PERDAS DAQUELE INVERSOR especifico
+    //    - h_om do inv X = soma das paradas O&M do inv X
+    //    - novo denominador = (n_inv - 1) * dias_mes * HORAS_SOLARES_POR_INV
+    //    - pct_om_novo = (h_om_total_orig - h_om_inv_X) / novo_denominador * 100
+    //
+    // Esta abordagem reflete fielmente "tira as perdas daquele inversor",
+    // ao contrario de uma reducao proporcional via fator energia.
     var orig = raw.kpis_originais || {};
-    var energia_orig = 0;
-    window.__RAW_DATA.inverters.forEach(function(inv){
-      Object.keys(inv.energias_diarias).forEach(function(d){
-        energia_orig += inv.energias_diarias[d];
-      });
-    });
-    // Fator de ajuste por exclusao de inversor
-    var fator_inv = energia_orig > 0 ? (energia_real / energia_orig) : 1;
-    // pct_geracao ajustado pela exclusao (proporcional)
-    // Sem exclusoes: fator_inv = 1, pct_geracao = original (match exato)
-    var pct_geracao = round((orig.pct_ger_pure || 0) + (orig.pct_irr || 0), 2);
-    var pct_ger_pure = round((orig.pct_ger_pure || 0) * fator_inv +
-                              ((orig.pct_ger_pure || 0) * (1 - fator_inv)), 2);
-    // Simplificacao: quando NAO ha exclusao, mantem original; quando ha, reduz proporcional
-    if (fator_inv < 0.9999) {
-      // Reduz disp em proporcional a fracao de energia perdida
-      pct_geracao = round(((orig.pct_ger_pure || 0) + (orig.pct_irr || 0)) * fator_inv +
-                          (100 - 100*fator_inv), 2);
-      // 100*(1-fator_inv) eh adicionado ao "outro" (perda por exclusao)
-    }
-    var pct_irr   = round(orig.pct_irr || 0, 2);
-    var pct_conc  = round((orig.pct_conc || 0) * fator_inv, 2);
-    var pct_om    = round((orig.pct_om || 0) * fator_inv, 2);
-    var pct_outro = round(Math.max(0, 100 - pct_geracao - pct_conc - pct_om), 2);
-    pct_ger_pure = round(pct_geracao - pct_irr, 2);
+    var HORAS_SOLARES_POR_DIA = 11.5;  // 06:30-18:00, mesmo intervalo do Python isc_5estados_mensal
+    var horas_solares_por_inv = dias_mes * HORAS_SOLARES_POR_DIA;
+    // n_inv_orig = total no dataset (inclui excluidos do calculo, mas nao fantasmas filtrados pelo ETL)
+    var n_inv_orig = window.__RAW_DATA.inverters.length;
+    var H_TOTAL_ORIG = n_inv_orig * horas_solares_por_inv;
 
-    // Contagem de paradas por categoria (afeta tabela/histograma, NAO o donut principal)
+    // Calcula horas off por inversor por categoria (apenas paradas FILTRADAS — ja respeitam exclusao)
+    var h_por_inv_categoria = {};  // {nome_inv: {concessionaria, om, outro}}
     var total_h_off = 0;
     var h_por_categoria = { concessionaria: 0, om: 0, outro: 0 };
     var n_ev_categoria = { concessionaria: 0, om: 0, outro: 0 };
@@ -156,7 +141,62 @@ JS_CALC = r"""
       if (p.causa) {
         horas_por_causa[p.causa] = (horas_por_causa[p.causa] || 0) + h;
       }
+      if (!h_por_inv_categoria[p.inversor]) {
+        h_por_inv_categoria[p.inversor] = { concessionaria: 0, om: 0, outro: 0, all: 0 };
+      }
+      h_por_inv_categoria[p.inversor].all += h;
+      if (cat) h_por_inv_categoria[p.inversor][cat] += h;
     });
+
+    // ── pct_X usando subtracao das horas off dos inversores excluidos ──
+    // Calcula h off dos EXCLUIDOS (com base na lista original de paradas, nao filtradas)
+    var excl = new Set(state.inversores_excluidos || []);
+    var h_conc_excl = 0, h_om_excl = 0, h_outro_excl = 0;
+    raw.paradas.forEach(function(p){
+      if (!excl.has(p.inversor)) return;
+      // Aplica edicoes de causa/responsavel tambem nas paradas dos excluidos
+      var edit = (state.paradas_editadas || {})[p.id];
+      var pp = edit ? Object.assign({}, p, edit) : p;
+      var cat = categoriaDoResponsavel(pp.responsavel, vocab);
+      var h = pp.duracao_h || 0;
+      if (cat === "concessionaria") h_conc_excl += h;
+      else if (cat === "om") h_om_excl += h;
+      else if (cat === "outro") h_outro_excl += h;
+    });
+
+    // Horas off totais ORIGINAIS (sabido via pct_X * H_TOTAL_ORIG / 100)
+    var h_conc_orig  = (orig.pct_conc || 0) * H_TOTAL_ORIG / 100;
+    var h_om_orig    = (orig.pct_om   || 0) * H_TOTAL_ORIG / 100;
+    var h_irr_orig   = (orig.pct_irr  || 0) * H_TOTAL_ORIG / 100;
+    var h_ger_orig   = (orig.pct_ger_pure || 0) * H_TOTAL_ORIG / 100;
+
+    // Novo denominador (apenas inversores nao excluidos)
+    var n_excl = excl.size;
+    var n_inv_atual = Math.max(0, n_inv_orig - n_excl);
+    var H_TOTAL_NOVO = n_inv_atual * horas_solares_por_inv;
+
+    // Calcular novas horas absolutas (subtraindo o que o excluido contribuia)
+    // Para conc/om/outro: usa as horas de paradas dos excluidos
+    var h_conc_novo  = Math.max(0, h_conc_orig - h_conc_excl);
+    var h_om_novo    = Math.max(0, h_om_orig   - h_om_excl);
+    var h_outro_novo = Math.max(0, 0 - h_outro_excl);  // outro nao existe no orig (Python so tem conc/om/irr)
+    // Sem h_outro_excl conhecido no original (Python so classificava conc/om), comeca em 0
+    if (h_outro_novo < 0) h_outro_novo = 0;
+    h_outro_novo = h_outro_excl >= 0 ? 0 : h_outro_novo;  // outro nao tem origem no Python — comeca 0
+
+    // irr: nao da pra atribuir a inversores individuais (vem do classificador 5min).
+    // Aproximacao: assume distribuido uniformemente (cada inv contribui 1/n_orig).
+    var fracao_excluida = n_inv_orig > 0 ? (n_excl / n_inv_orig) : 0;
+    var h_irr_novo   = h_irr_orig * (1 - fracao_excluida);
+
+    // Percentuais novos — conc/om/outro/irr usam horas subtraidas explicitamente
+    var pct_conc  = H_TOTAL_NOVO > 0 ? round(h_conc_novo  / H_TOTAL_NOVO * 100, 2) : 0;
+    var pct_om    = H_TOTAL_NOVO > 0 ? round(h_om_novo    / H_TOTAL_NOVO * 100, 2) : 0;
+    var pct_outro = H_TOTAL_NOVO > 0 ? round(h_outro_novo / H_TOTAL_NOVO * 100, 2) : 0;
+    var pct_irr   = H_TOTAL_NOVO > 0 ? round(h_irr_novo   / H_TOTAL_NOVO * 100, 2) : 0;
+    // pct_ger_pure = complemento (garante soma = 100% e respeita "tira as perdas do inv")
+    var pct_ger_pure = round(Math.max(0, 100 - pct_irr - pct_conc - pct_om - pct_outro), 2);
+    var pct_geracao = round(pct_ger_pure + pct_irr, 2);
 
     // Tabela de inversores
     var df_inv = inverters.map(function(inv){
