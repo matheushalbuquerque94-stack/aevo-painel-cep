@@ -837,6 +837,113 @@ CSS = '@page{size:A4 landscape;margin:0}*{box-sizing:border-box;margin:0;padding
 LOGO_B64 = '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'
 import json as _json_mod
 
+def _build_raw_dataset(cad, kpis, kpis_5est, df_daily, df_paradas, pvsyst,
+                       tarifa, poa, fonte_poa, fonte_energia, ano, mes, disp_dia_inv):
+    """Monta dict com TODOS os dados crus do relatorio. Serializado em JSON
+    no HTML para permitir edicao interativa client-side."""
+    import json as _json_dataset
+    # Inversores: lista de {nome, modelo, energia_kwh_total, energias_diarias{dia: kwh}}
+    inversores = []
+    if df_daily is not None and not df_daily.empty:
+        for inv_name, grp in df_daily.groupby("inversor"):
+            energias = {}
+            for _, r in grp.iterrows():
+                d = r["dia"]
+                if hasattr(d, "strftime"): k = d.strftime("%Y-%m-%d")
+                else:
+                    s = str(d); k = s if "-" in s else f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+                energias[k] = float(r["energia_kwh"])
+            modelo = ""
+            if "modelo" in grp.columns:
+                _m = grp["modelo"].iloc[0]
+                modelo = str(_m) if _m is not None else ""
+            inversores.append({
+                "nome": str(inv_name),
+                "modelo": modelo,
+                "energia_total_kwh": round(float(grp["energia_kwh"].sum()), 2),
+                "energias_diarias": energias,
+            })
+    # Paradas: lista de {id, inversor, inicio, fim, duracao_h, causa, responsavel}
+    paradas_list = []
+    if df_paradas is not None and not df_paradas.empty:
+        for i, r in df_paradas.iterrows():
+            paradas_list.append({
+                "id": f"p{i}",
+                "inversor": str(r["inversor"]),
+                "inicio": str(r.get("inicio", "")),
+                "fim": str(r.get("fim", "")) if r.get("fim") is not None else "",
+                "duracao_h": float(r.get("duracao_h", 0)),
+                "tipo": str(r.get("tipo", "")),
+                "causa": str(r.get("causa", "")) if r.get("causa") is not None else "",
+                "responsavel": str(r.get("responsavel", "")) if r.get("responsavel") is not None else "",
+            })
+    # Disp dia inversor: {dia(int): {inv: pct}}
+    disp_dia = {}
+    if disp_dia_inv:
+        for d, d_dict in disp_dia_inv.items():
+            disp_dia[int(d)] = {str(k): float(v) for k, v in d_dict.items()}
+
+    return {
+        "plant": {
+            "id": int(cad.get("id", 0)) if cad.get("id") else None,
+            "name": str(cad.get("name", "")),
+            "kwp": float(cad.get("nominal_power_kwp") or 0),
+            "ano": int(ano), "mes": int(mes),
+            "dias_mes": calendar.monthrange(int(ano), int(mes))[1],
+            "fonte_energia": str(fonte_energia or ""),
+        },
+        "pvsyst": {
+            "e_grid": float(pvsyst.get("e_grid") or 0),
+            "pr": float(pvsyst.get("pr") or 0),
+            "p50": float(pvsyst.get("p50") or 0),
+            "p75": float(pvsyst.get("p75") or 0),
+            "glob_inc": float(pvsyst.get("glob_inc") or 0),
+            "glob_hor": float(pvsyst.get("glob_hor") or 0),
+        },
+        "inverters": inversores,
+        "paradas": paradas_list,
+        "disp_dia_inv": disp_dia,
+        "kpis_originais": {
+            "energia_real": float(kpis.get("energia_real", 0)),
+            "pr_real": float(kpis.get("pr_real", 0)),
+            "at": float(kpis.get("at", 0)),
+            "disp_ger": float(kpis.get("disp_ger", 0)),
+            "var_poa": float(kpis.get("var_poa", 0)),
+            "dias_com_dado": int(kpis.get("dias_com_dado", 0)),
+            "cob_pct": float(kpis.get("cob_pct", 0)),
+            "esp_kwp": float(kpis.get("esp_kwp", 0)),
+            "tier": int(kpis_5est.get("tier", 2)) if kpis_5est else 2,
+            "pct_ger_pure": float(kpis_5est.get("pct_ger_pure", 0)) if kpis_5est else 0,
+            "pct_irr": float(kpis_5est.get("pct_irr", 0)) if kpis_5est else 0,
+            "pct_conc": float(kpis_5est.get("pct_conc", 0)) if kpis_5est else 0,
+            "pct_om": float(kpis_5est.get("pct_om", 0)) if kpis_5est else 0,
+        },
+        "estado_inicial": {
+            "tarifa_rs_kwh": float(tarifa or 0),
+            "poa_kwh_m2": float(poa or 0),
+            "poa_fonte": str(fonte_poa or ""),
+        },
+    }
+
+
+# Vocabulario default de causas e responsaveis (usado quando nao ha customizacao)
+_VOCAB_DEFAULT = {
+    "causas": [
+        {"id": "sob_ca",    "label": "Sobretensao CA"},
+        {"id": "sub_ca",    "label": "Subtensao CA"},
+        {"id": "off_rede",  "label": "OFF (rede/coletivo)"},
+        {"id": "off_eq",    "label": "OFF (equipamento/trip)"},
+        {"id": "desc_tot",  "label": "Desconexao total"},
+        {"id": "baixa_irr", "label": "Baixa irradiacao"},
+    ],
+    "responsaveis": [
+        {"id": "conc", "label": "Concessionaria",      "categoria": "concessionaria", "cor": "#0F9ED5"},
+        {"id": "om",   "label": "Equipamento / O&M",   "categoria": "om",             "cor": "#E45C54"},
+        {"id": "irr",  "label": "Irradiacao baixa",    "categoria": "outro",          "cor": "#A8D8B9"},
+    ],
+}
+
+
 def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
                ano,mes,charts,tem_estacao,poa,fonte_poa,
                disp_op_media,fonte_energia,kpis_5est=None,disp_dia_inv=None,df_daily=None):
@@ -1499,6 +1606,26 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
           '<div class="callout" style="flex:1">'
             '<div class="cb" contenteditable="true">'+obs_txt+'</div>'
           '</div>'+ft()+'</div>')
+
+    # ── Dataset cru + vocabulario (para edicao client-side) ──
+    _raw_dataset = _build_raw_dataset(cad, kpis, kpis_5est, df_daily, df_paradas,
+                                       pvsyst, tarifa, poa, fonte_poa, fonte_energia,
+                                       ano, mes, disp_dia_inv)
+    _raw_json = _json_mod.dumps(_raw_dataset, ensure_ascii=False)
+    _vocab_json = _json_mod.dumps(_VOCAB_DEFAULT, ensure_ascii=False)
+    html += ('<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
+             '<script id="__vocab_default__" type="application/json">' + _vocab_json + '</script>'
+             '<script>'
+             'window.__RAW_DATA = JSON.parse(document.getElementById("__raw_data__").textContent);'
+             'window.__VOCAB_DEFAULT = JSON.parse(document.getElementById("__vocab_default__").textContent);'
+             'window.__STATE = {'
+             '  tarifa_rs_kwh: window.__RAW_DATA.estado_inicial.tarifa_rs_kwh,'
+             '  poa_kwh_m2: window.__RAW_DATA.estado_inicial.poa_kwh_m2,'
+             '  inversores_excluidos: [],'
+             '  paradas_editadas: {},'
+             '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT))'
+             '};'
+             '</script>')
 
     # Scripts Chart.js
     html+=('<script>window.addEventListener("load",function(){'
