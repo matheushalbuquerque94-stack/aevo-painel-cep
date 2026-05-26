@@ -1646,7 +1646,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
              '  poa_kwh_m2: window.__RAW_DATA.estado_inicial.poa_kwh_m2,'
              '  inversores_excluidos: [],'
              '  paradas_editadas: {},'
-             '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT))'
+             '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT)),'
+             '  usina_overrides: {}'
              '};'
              '</script>'
              '<script>' + _dyn_js + '</script>')

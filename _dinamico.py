@@ -202,7 +202,9 @@ JS_BUNDLE = r"""
     var paradas = getParadas(state);
     var raw = window.__RAW_DATA;
     var vocab = state.vocab || window.__VOCAB_DEFAULT;
-    var kwp = raw.plant.kwp || 0;
+    var ovr = state.usina_overrides || {};
+    // Aplica overrides quando definidos (e nao zero), senao usa valor original
+    var kwp = (ovr.kwp != null && ovr.kwp !== '' && +ovr.kwp > 0) ? +ovr.kwp : (raw.plant.kwp || 0);
     var dias_mes = raw.plant.dias_mes;
     var n_inv = inverters.length;
 
@@ -228,9 +230,16 @@ JS_BUNDLE = r"""
       });
     });
 
-    var ee = raw.pvsyst.e_grid || 0;
-    var pr_e = raw.pvsyst.pr || 0;
-    var glob_inc = raw.pvsyst.glob_inc || 0;
+    // Overrides PVsyst (se definido != null e > 0)
+    function _ovr(k, def){
+      var v = ovr[k];
+      return (v != null && v !== '' && +v > 0) ? +v : def;
+    }
+    var ee = _ovr('e_grid', raw.pvsyst.e_grid || 0);
+    var pr_e = _ovr('pr', raw.pvsyst.pr || 0);
+    var glob_inc = _ovr('glob_inc', raw.pvsyst.glob_inc || 0);
+    var p50 = _ovr('p50', raw.pvsyst.p50 || 0);
+    var p75 = _ovr('p75', raw.pvsyst.p75 || 0);
     var poa = state.poa_kwh_m2 || 0;
     var tarifa = state.tarifa_rs_kwh || 0;
     var pr_real = (poa > 0 && kwp > 0) ? (energia_real / (poa * kwp)) : 0;
@@ -330,6 +339,7 @@ JS_BUNDLE = r"""
       ee: ee, at: at,
       pr_real: round(pr_real, 4), pr_e: pr_e, esp_kwp: round(esp_kwp, 2),
       poa: poa, var_poa: var_poa, glob_inc: glob_inc,
+      p50: p50, p75: p75, kwp: kwp,
       dias_com_dado: dias_com_dado, cob_pct: cob_pct,
       disp_ger: disp_ger, disp_ger_cobertura: disp_ger_cobertura,
       receita: round(receita, 2), tarifa: tarifa,
@@ -956,7 +966,36 @@ JS_BUNDLE = r"""
       em_uso_resp[r] = (em_uso_resp[r] || 0) + 1;
     });
 
-    var html = '<div class="dyn-feedback">Gerencie causas e responsaveis. Remocao bloqueada se em uso.</div>';
+    var html = '';
+    // ── Secao: Parametros da Usina (overrides PVsyst e kWp) ──
+    var raw = window.__RAW_DATA;
+    var ovr = s.usina_overrides || {};
+    function _v(k, def){ return (ovr[k] != null && ovr[k] !== '') ? ovr[k] : (def != null ? def : ''); }
+    html += '<div class="dyn-feedback">Parametros da usina vindos do banco. Edite para sobrescrever no relatorio.</div>';
+    html += '<h4 style="margin:14px 0 6px;font-size:13px">Parametros da Usina</h4>';
+    html += '<table class="dyn-tbl"><tbody>';
+    html += '<tr><td>Potência nominal (kWp)</td>' +
+            '<td><input class="dyn-input" type="number" step="0.01" data-ovr="kwp" placeholder="' + (raw.plant.kwp||0) + '" value="' + _v('kwp', '') + '"/></td>' +
+            '<td style="color:#6B7C8F;font-size:10px">banco: ' + fmtN(raw.plant.kwp||0, 0) + '</td></tr>';
+    html += '<tr><td>Energia esperada PVsyst (kWh)</td>' +
+            '<td><input class="dyn-input" type="number" step="0.01" data-ovr="e_grid" placeholder="' + (raw.pvsyst.e_grid||0) + '" value="' + _v('e_grid', '') + '"/></td>' +
+            '<td style="color:#6B7C8F;font-size:10px">banco: ' + fmtN(raw.pvsyst.e_grid||0, 0) + '</td></tr>';
+    html += '<tr><td>POA esperado PVsyst (kWh/m²)</td>' +
+            '<td><input class="dyn-input" type="number" step="0.01" data-ovr="glob_inc" placeholder="' + (raw.pvsyst.glob_inc||0) + '" value="' + _v('glob_inc', '') + '"/></td>' +
+            '<td style="color:#6B7C8F;font-size:10px">banco: ' + fmtN(raw.pvsyst.glob_inc||0, 2) + '</td></tr>';
+    html += '<tr><td>PR esperado PVsyst</td>' +
+            '<td><input class="dyn-input" type="number" step="0.0001" data-ovr="pr" placeholder="' + (raw.pvsyst.pr||0) + '" value="' + _v('pr', '') + '"/></td>' +
+            '<td style="color:#6B7C8F;font-size:10px">banco: ' + Number(raw.pvsyst.pr||0).toFixed(4).replace('.',',') + '</td></tr>';
+    html += '<tr><td>P50 (kWh)</td>' +
+            '<td><input class="dyn-input" type="number" step="0.01" data-ovr="p50" placeholder="' + (raw.pvsyst.p50||0) + '" value="' + _v('p50', '') + '"/></td>' +
+            '<td style="color:#6B7C8F;font-size:10px">banco: ' + fmtN(raw.pvsyst.p50||0, 0) + '</td></tr>';
+    html += '<tr><td>P75 (kWh)</td>' +
+            '<td><input class="dyn-input" type="number" step="0.01" data-ovr="p75" placeholder="' + (raw.pvsyst.p75||0) + '" value="' + _v('p75', '') + '"/></td>' +
+            '<td style="color:#6B7C8F;font-size:10px">banco: ' + fmtN(raw.pvsyst.p75||0, 0) + '</td></tr>';
+    html += '</tbody></table>';
+    html += '<div style="font-size:11px;color:#6B7C8F;margin:4px 0 18px">Deixe vazio para usar o valor do banco. Qualquer numero positivo sobrescreve.</div>';
+
+    html += '<div class="dyn-feedback">Vocabulario de causas e responsaveis. Remocao bloqueada se em uso.</div>';
 
     // Causas
     html += '<h4 style="margin:14px 0 6px;font-size:13px">Causas</h4>';
@@ -1042,6 +1081,20 @@ JS_BUNDLE = r"""
       });
     }
     else if (name === 'param') {
+      // Handlers de overrides PVsyst/kWp
+      document.querySelectorAll('[data-ovr]').forEach(function(el){
+        el.addEventListener('input', function(){
+          var k = el.getAttribute('data-ovr');
+          var v = el.value;
+          window.__STATE.usina_overrides = window.__STATE.usina_overrides || {};
+          if (v === '' || v == null) {
+            delete window.__STATE.usina_overrides[k];
+          } else {
+            window.__STATE.usina_overrides[k] = parseFloat(v) || 0;
+          }
+          redraw();
+        });
+      });
       document.querySelectorAll('[data-vocab]').forEach(function(el){
         el.addEventListener('change', function(){
           var grp = el.getAttribute('data-vocab');
