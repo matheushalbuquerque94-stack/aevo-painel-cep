@@ -842,6 +842,15 @@ def _build_raw_dataset(cad, kpis, kpis_5est, df_daily, df_paradas, pvsyst,
     """Monta dict com TODOS os dados crus do relatorio. Serializado em JSON
     no HTML para permitir edicao interativa client-side."""
     import json as _json_dataset
+    # Construir lookup de disp_op_pct/horas_off a partir do df_inv (que ja merged com df_disp_op)
+    df_inv_kpi = kpis.get("df_inv", pd.DataFrame()) if kpis else pd.DataFrame()
+    disp_op_lookup = {}
+    horas_off_lookup = {}
+    if not df_inv_kpi.empty:
+        for _, r in df_inv_kpi.iterrows():
+            disp_op_lookup[str(r["inversor"])] = float(r.get("disp_op_pct", 0) or 0)
+            horas_off_lookup[str(r["inversor"])] = float(r.get("horas_off", 0) or 0)
+
     # Inversores: lista de {nome, modelo, energia_kwh_total, energias_diarias{dia: kwh}}
     inversores = []
     if df_daily is not None and not df_daily.empty:
@@ -862,6 +871,8 @@ def _build_raw_dataset(cad, kpis, kpis_5est, df_daily, df_paradas, pvsyst,
                 "modelo": modelo,
                 "energia_total_kwh": round(float(grp["energia_kwh"].sum()), 2),
                 "energias_diarias": energias,
+                "disp_op_pct": disp_op_lookup.get(str(inv_name), 0.0),
+                "horas_off": horas_off_lookup.get(str(inv_name), 0.0),
             })
     # Paradas: lista de {id, inversor, inicio, fim, duracao_h, causa, responsavel}
     paradas_list = []
@@ -939,7 +950,6 @@ _VOCAB_DEFAULT = {
     "responsaveis": [
         {"id": "conc", "label": "Concessionaria",      "categoria": "concessionaria", "cor": "#0F9ED5"},
         {"id": "om",   "label": "Equipamento / O&M",   "categoria": "om",             "cor": "#E45C54"},
-        {"id": "irr",  "label": "Irradiacao baixa",    "categoria": "outro",          "cor": "#A8D8B9"},
     ],
 }
 
@@ -1268,7 +1278,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
             '<div class="meta-item"><label>Potência Nominal</label><p contenteditable="true">'+kwp_s+' kWp</p></div>'
             '<div class="meta-item"><label>Contrato O&amp;M</label><p contenteditable="true">'+contrato+'</p></div>'
             '<div class="meta-item"><label>Vigência</label><p contenteditable="true">'+fim_s+'</p></div>'
-            '<div class="meta-item"><label>Tarifa</label><p contenteditable="true">'+tar_s+'</p></div>'
+            '<div class="meta-item"><label>Tarifa</label><p data-kpi="tarifa" data-fmt="tar_rs">'+tar_s+'</p></div>'
             '<div class="meta-item"><label>Fonte Energia</label><p contenteditable="true">'+fonte_energia+'</p></div>'
           '</div>'
         '</div>'
@@ -1334,7 +1344,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
             '<div class="kpi-2">'
               '<div class="kpi pu"><div class="lbl" contenteditable="true">Receita Estimada</div>'
                 '<div class="val sm" data-kpi="receita" data-fmt="rs">'+rec_s+'</div>'
-                '<div class="unit" contenteditable="true">Tarifa: '+tar_s+'</div></div>'
+                '<div class="unit"><span contenteditable="true">Tarifa:</span> <span data-kpi="tarifa" data-fmt="tar_rs">'+tar_s+'</span></div></div>'
               '<div class="kpi yw"><div class="lbl" contenteditable="true">POA Medido</div>'
                 '<div class="val sm" data-kpi="poa" data-fmt="poa_kwh">'+poa_s+'</div>'
                 '<div class="unit"><span contenteditable="true">Variação:</span> <span data-kpi="var_poa" data-fmt="p1">'+varp_s+'</span> <span contenteditable="true">(PVsyst: '+glinc_s+')</span></div></div>'

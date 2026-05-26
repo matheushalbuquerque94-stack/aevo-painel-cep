@@ -310,9 +310,18 @@ JS_BUNDLE = r"""
         esp_kwh_kwp: (kwp && n_inv) ? round(en / (kwp / n_inv), 2) : 0,
         dias_com_dado: dias_com_dado_por_inv[inv.nome] || 0,
         disp_ger_pct: dias_mes ? round((dias_com_dado_por_inv[inv.nome] || 0) / dias_mes * 100, 1) : 0,
+        disp_op_pct: inv.disp_op_pct || 0,
+        horas_off: inv.horas_off || 0,
       };
     });
     df_inv.sort(function(a, b){ return b.energia_kwh - a.energia_kwh; });
+    // Calcular desvios (vs media e vs melhor)
+    var med_e = df_inv.length ? df_inv.reduce(function(s,x){return s+x.energia_kwh;},0) / df_inv.length : 0;
+    var mel_e = df_inv.length ? Math.max.apply(null, df_inv.map(function(x){return x.energia_kwh;})) : 0;
+    df_inv.forEach(function(x){
+      x.desvio_media = med_e ? round((x.energia_kwh - med_e) / med_e * 100, 1) : 0;
+      x.desvio_melhor = mel_e ? round((x.energia_kwh - mel_e) / mel_e * 100, 1) : 0;
+    });
 
     var tier = orig.tier || 2;
     var disp_ger = (tier === 1) ? pct_geracao : disp_ger_cobertura;
@@ -382,6 +391,7 @@ JS_BUNDLE = r"""
       else if (fmt === 'rs') el.textContent = (v === 0 ? '---' : fmtRS(v));
       else if (fmt === 'h2') el.textContent = fmtN(v, 2) + ' h';
       else if (fmt === 'poa_kwh') el.textContent = (v === 0 ? '---' : fmtN(v, 2) + ' kWh/m²');
+      else if (fmt === 'tar_rs') el.textContent = (v === 0 ? '---' : 'R$ ' + fmtN(v, 2) + '/kWh');
       else el.textContent = String(v);
     });
     // Atualizar formula PR (string composta)
@@ -400,16 +410,28 @@ JS_BUNDLE = r"""
   }
 
   function atualizarTabelaInversores(kpis) {
-    var tbody = document.querySelector('[data-tbl="inversores"] tbody, tbody[data-tbl="inversores"]');
+    var tbody = document.querySelector('tbody[data-tbl="inversores"]');
     if (!tbody) return;
+    var medals = ['🥇','🥈','🥉'];
     var html = '';
     kpis.df_inv.forEach(function(inv, i){
-      html += '<tr><td contenteditable="true">' + inv.inversor + '</td>' +
-              '<td contenteditable="true">' + fmtN(inv.energia_kwh, 2) + '</td>' +
-              '<td contenteditable="true">' + fmtN(inv.esp_kwh_kwp, 2) + '</td>' +
-              '<td contenteditable="true">' + fmtN(inv.pct, 1) + '%</td>' +
-              '<td contenteditable="true">' + fmtN(inv.dias_com_dado, 0) + '</td>' +
-              '<td contenteditable="true">' + fmtN(inv.disp_ger_pct, 1) + '%</td></tr>';
+      var medal = i < 3 ? medals[i] : '';
+      var chip_cls = inv.disp_op_pct >= 99 ? 'ok' : 'warn';
+      var dm_cls = inv.desvio_media >= -5 ? 'cval-ok' : 'cval-bad';
+      var db_cls = inv.desvio_melhor >= -5 ? 'cval-ok' : 'cval-bad';
+      var row_cls = inv.desvio_media < -10 ? ' class="alrt"' : '';
+      var sign_dm = (inv.desvio_media > 0 ? '+' : '') + Number(inv.desvio_media).toFixed(1).replace('.', ',') + '%';
+      var sign_db = (inv.desvio_melhor > 0 ? '+' : '') + Number(inv.desvio_melhor).toFixed(1).replace('.', ',') + '%';
+      html += '<tr' + row_cls + '><td>' + medal + '<span>' + inv.inversor + '</span></td>' +
+              '<td>' + (inv.modelo || '') + '</td>' +
+              '<td style="text-align:right">' + fmtN(inv.energia_kwh, 2) + '</td>' +
+              '<td style="text-align:right">' + fmtN(inv.esp_kwh_kwp, 2) + '</td>' +
+              '<td style="text-align:right">' + fmtP(inv.pct, 1) + '</td>' +
+              '<td style="text-align:right">' + fmtP(inv.disp_ger_pct, 1) + '</td>' +
+              '<td style="text-align:right"><span class="chip ' + chip_cls + '">' + fmtP(inv.disp_op_pct, 2) + '</span></td>' +
+              '<td style="text-align:right">' + fmtN(inv.horas_off, 2) + 'h</td>' +
+              '<td style="text-align:right" class="' + dm_cls + '">' + sign_dm + '</td>' +
+              '<td style="text-align:right" class="' + db_cls + '">' + sign_db + '</td></tr>';
     });
     tbody.innerHTML = html;
   }
