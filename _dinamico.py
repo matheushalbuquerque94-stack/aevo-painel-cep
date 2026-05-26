@@ -51,20 +51,21 @@ JS_CALC = r"""
     var n_inv = inverters.length;
 
     // Energia real = soma de tudo
+    // dias_com_dado: count de linhas no df (Python groupby + count NAO filtra v>0)
+    // Critico para disp_ger casar com Python ao 100%.
     var energia_real = 0;
     var dias_set = new Set();
     var energia_por_inv = {};
     var dias_com_dado_por_inv = {};
     inverters.forEach(function(inv){
       var soma = 0;
-      var n_dias = 0;
-      Object.keys(inv.energias_diarias).forEach(function(d){
-        var v = inv.energias_diarias[d];
-        soma += v;
-        if (v > 0) { dias_set.add(d); n_dias++; }
+      var keys = Object.keys(inv.energias_diarias);
+      keys.forEach(function(d){
+        soma += inv.energias_diarias[d];
+        dias_set.add(d);  // dias_com_dado global = nunique() das datas (todas)
       });
       energia_por_inv[inv.nome] = soma;
-      dias_com_dado_por_inv[inv.nome] = n_dias;
+      dias_com_dado_por_inv[inv.nome] = keys.length;  // count() = todas as linhas
       energia_real += soma;
     });
 
@@ -88,20 +89,58 @@ JS_CALC = r"""
     var var_poa = (poa > 0 && glob_inc > 0) ? round((poa - glob_inc) / glob_inc * 100, 1) : 0;
     var dias_com_dado = dias_set.size;
     var cob_pct = dias_mes ? round(dias_com_dado / dias_mes * 100, 1) : 0;
-    // Disp ger: media de (dias_com_dado / dias_mes * 100) por inversor
-    var disp_ger = 0;
+    // disp_ger_cobertura: replica exatamente o Python calc_kpis (tier 2 usa esse):
+    //   df_inv["disp_ger_pct"] = (dias/dias_mes*100).round(1)  <- por inversor, round 1 casa
+    //   disp_ger = float(df_inv["disp_ger_pct"].mean())         <- mean(), sem round
+    var disp_ger_cobertura = 0;
     if (n_inv > 0) {
       var soma_disp = 0;
       inverters.forEach(function(inv){
-        soma_disp += (dias_com_dado_por_inv[inv.nome] || 0) / dias_mes * 100;
+        var pct = (dias_com_dado_por_inv[inv.nome] || 0) / dias_mes * 100;
+        soma_disp += round(pct, 1);
       });
-      disp_ger = round(soma_disp / n_inv, 1);
+      disp_ger_cobertura = soma_disp / n_inv;
     }
+    // disp_ger exibido: tier 1 usa pct_geracao (calculado abaixo), tier 2 usa cobertura
+    // Calculado depois do bloco 5-estados.
     var receita = energia_real * tarifa;
 
-    // 5 estados — atualizado a partir das paradas (com categorias do vocab)
-    // pct_irr, pct_conc, pct_om, pct_outro: fracao de paradas de cada categoria
-    // pct_ger_pure = 100 - irr - conc - om - outro
+    // ── 5 estados ──
+    // ATENCAO: pct_geracao do tier 1 vem de classificacao 5min do ISC (~10k intervalos).
+    // Recalcular fielmente no client exigiria embedar todos os intervalos no HTML.
+    // Estrategia: usar valores ORIGINAIS do Python como baseline.
+    // - Edicao de causa/responsavel afeta apenas tabela/histograma de horas por causa
+    //   (pct_geracao NAO muda — o tempo em estado GER nao depende de como classificamos
+    //    a causa de uma parada).
+    // - Exclusao de inversor: ajusta pct_geracao proporcionalmente pela energia.
+    var orig = raw.kpis_originais || {};
+    var energia_orig = 0;
+    window.__RAW_DATA.inverters.forEach(function(inv){
+      Object.keys(inv.energias_diarias).forEach(function(d){
+        energia_orig += inv.energias_diarias[d];
+      });
+    });
+    // Fator de ajuste por exclusao de inversor
+    var fator_inv = energia_orig > 0 ? (energia_real / energia_orig) : 1;
+    // pct_geracao ajustado pela exclusao (proporcional)
+    // Sem exclusoes: fator_inv = 1, pct_geracao = original (match exato)
+    var pct_geracao = round((orig.pct_ger_pure || 0) + (orig.pct_irr || 0), 2);
+    var pct_ger_pure = round((orig.pct_ger_pure || 0) * fator_inv +
+                              ((orig.pct_ger_pure || 0) * (1 - fator_inv)), 2);
+    // Simplificacao: quando NAO ha exclusao, mantem original; quando ha, reduz proporcional
+    if (fator_inv < 0.9999) {
+      // Reduz disp em proporcional a fracao de energia perdida
+      pct_geracao = round(((orig.pct_ger_pure || 0) + (orig.pct_irr || 0)) * fator_inv +
+                          (100 - 100*fator_inv), 2);
+      // 100*(1-fator_inv) eh adicionado ao "outro" (perda por exclusao)
+    }
+    var pct_irr   = round(orig.pct_irr || 0, 2);
+    var pct_conc  = round((orig.pct_conc || 0) * fator_inv, 2);
+    var pct_om    = round((orig.pct_om || 0) * fator_inv, 2);
+    var pct_outro = round(Math.max(0, 100 - pct_geracao - pct_conc - pct_om), 2);
+    pct_ger_pure = round(pct_geracao - pct_irr, 2);
+
+    // Contagem de paradas por categoria (afeta tabela/histograma, NAO o donut principal)
     var total_h_off = 0;
     var h_por_categoria = { concessionaria: 0, om: 0, outro: 0 };
     var n_ev_categoria = { concessionaria: 0, om: 0, outro: 0 };
@@ -118,16 +157,6 @@ JS_CALC = r"""
         horas_por_causa[p.causa] = (horas_por_causa[p.causa] || 0) + h;
       }
     });
-    // Horas solares totais aproximadas: 30 dias × 11h × n_inv = 330 × n_inv
-    // Mas como o calculo do Python usa intervalos discretos, aproximamos com:
-    // pct_X = h_categoria / (horas_solares_totais) * 100
-    var horas_solares_totais = dias_mes * 11 * Math.max(n_inv, 1);
-    var pct_conc  = horas_solares_totais ? round(h_por_categoria.concessionaria / horas_solares_totais * 100, 2) : 0;
-    var pct_om    = horas_solares_totais ? round(h_por_categoria.om / horas_solares_totais * 100, 2) : 0;
-    var pct_outro = horas_solares_totais ? round(h_por_categoria.outro / horas_solares_totais * 100, 2) : 0;
-    var pct_irr   = round(raw.kpis_originais.pct_irr || 0, 2);  // irr nao muda com edicao de paradas
-    var pct_ger_pure = round(100 - pct_irr - pct_conc - pct_om - pct_outro, 2);
-    var pct_geracao = round(pct_ger_pure + pct_irr, 2);
 
     // Tabela de inversores
     var df_inv = inverters.map(function(inv){
@@ -145,6 +174,9 @@ JS_CALC = r"""
     df_inv.sort(function(a, b){ return b.energia_kwh - a.energia_kwh; });
 
     var total_ev = paradas.length;
+    // disp_ger: tier 1 usa pct_geracao (recalculado), tier 2 usa cobertura (df_inv mean)
+    var tier = orig.tier || 2;
+    var disp_ger = (tier === 1) ? pct_geracao : disp_ger_cobertura;
     return {
       // KPIs principais
       energia_real: round(energia_real, 2),
@@ -153,6 +185,7 @@ JS_CALC = r"""
       poa: poa, var_poa: var_poa, glob_inc: glob_inc,
       dias_com_dado: dias_com_dado, cob_pct: cob_pct,
       disp_ger: disp_ger,
+      disp_ger_cobertura: disp_ger_cobertura,
       receita: round(receita, 2),
       tarifa: tarifa,
       // 5 estados
