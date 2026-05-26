@@ -16,6 +16,12 @@ Estrutura:
 # 1. CSS — drawer + overrides
 # ──────────────────────────────────────────────────────────────────────────
 CSS = r"""
+/* Permite rolagem em tela (mantem layout A4 ao imprimir) */
+@media screen {
+  html, body { overflow-y: auto !important; height: auto !important; }
+  body { padding-bottom: 80px; /* espaco pro FAB nao tampar conteudo */ }
+}
+
 /* Botao flutuante */
 .dyn-fab {
   position: fixed; bottom: 22px; right: 22px; z-index: 9998;
@@ -361,7 +367,6 @@ JS_BUNDLE = r"""
   }
 
   function atualizarKPICards(kpis) {
-    // Por class+data-attribute. Cada KPI tem [data-kpi="<nome>"]
     document.querySelectorAll('[data-kpi]').forEach(function(el){
       var k = el.getAttribute('data-kpi');
       var fmt = el.getAttribute('data-fmt') || '';
@@ -372,13 +377,25 @@ JS_BUNDLE = r"""
       else if (fmt === 'p1') el.textContent = fmtP(v, 1);
       else if (fmt === 'p2') el.textContent = fmtP(v, 2);
       else if (fmt === 'p4') el.textContent = Number(v).toFixed(4).replace('.', ',');
-      else if (fmt === 'pr4') {
-        // PR especial: '0,7826' formato Python
-        el.textContent = (v === 0 ? '---' : Number(v).toFixed(4).replace('.', ','));
-      }
+      else if (fmt === 'p1_signed') el.textContent = (v > 0 ? '+' : '') + fmtP(v, 1);
+      else if (fmt === 'pr4') el.textContent = (v === 0 ? '---' : Number(v).toFixed(4).replace('.', ','));
       else if (fmt === 'rs') el.textContent = (v === 0 ? '---' : fmtRS(v));
       else if (fmt === 'h2') el.textContent = fmtN(v, 2) + ' h';
+      else if (fmt === 'poa_kwh') el.textContent = (v === 0 ? '---' : fmtN(v, 2) + ' kWh/m²');
       else el.textContent = String(v);
+    });
+    // Atualizar formula PR (string composta)
+    document.querySelectorAll('[data-tech="pr_formula"]').forEach(function(el){
+      var raw = window.__RAW_DATA;
+      var en = kpis.energia_real || 0;
+      var poa = kpis.poa || 0;
+      var kwp = raw.plant.kwp || 0;
+      if (poa > 0 && kwp > 0) {
+        el.textContent = fmtN(en, 0) + ' / (' + fmtN(poa, 2) + ' x ' + fmtN(kwp, 0) + ') = ' +
+                         (kpis.pr_real ? Number(kpis.pr_real).toFixed(4).replace('.', ',') : '---');
+      } else {
+        el.textContent = '---';
+      }
     });
   }
 
@@ -398,32 +415,61 @@ JS_BUNDLE = r"""
   }
 
   function atualizarTabelaOcorrencias(kpis) {
-    // Atualiza a tabela de ocorrencias na pag 5+ do relatorio.
-    var tbody = document.querySelector('tbody[data-tbl="ocorrencias"]');
-    if (!tbody) return;
+    // Atualiza TODAS as tbodies da tabela de ocorrencias (a tabela pode ser
+    // paginada em multiplas paginas se houver muitas paradas).
+    var tbodies = document.querySelectorAll('tbody[data-tbl="ocorrencias"]');
+    if (tbodies.length === 0) return;
     var raw = window.__RAW_DATA;
     var orig = raw.kpis_originais || {};
     var is_tier1 = (orig.tier || 2) === 1;
-    var html = '';
+
+    function _faixa(inicio) {
+      // dd/MM/yyyy HH:mm → faixa do dia
+      try {
+        var hm = parseInt(inicio.substr(11,2));
+        if (hm >= 6 && hm < 8)  return ['Partida', '#E6F1FB', '#185FA5'];
+        if (hm >= 8 && hm < 12) return ['Pico M',  '#FAEEDA', '#854F0B'];
+        if (hm >= 12 && hm < 17)return ['Pico T',  '#FAEEDA', '#854F0B'];
+        if (hm >= 17 && hm < 19)return ['Declinio','#E1F5EE', '#0F6E56'];
+        return ['Fora solar', '#F1EFE8', '#5F5E5A'];
+      } catch(e) { return ['—', '#F1EFE8', '#5F5E5A']; }
+    }
+
+    // Linhas geradas (mesmas para todas as tbodies — paginacao eh visual,
+    // distribuimos pelo numero de linhas em cada tbody)
+    var allRows = [];
     if (kpis.paradas.length === 0) {
       var cols = is_tier1 ? 9 : 7;
-      html = '<tr><td colspan="' + cols + '" style="text-align:center;color:#888;padding:12px">Nenhuma ocorrencia no periodo</td></tr>';
+      allRows.push('<tr><td colspan="' + cols + '" style="text-align:center;color:#888;padding:12px">Nenhuma ocorrencia no periodo</td></tr>');
     } else {
       kpis.paradas.forEach(function(p){
-        html += '<tr><td><span class="chip warn">Parada Parcial</span></td>' +
-                '<td contenteditable="true">' + p.inversor + '</td>' +
-                '<td contenteditable="true">' + p.inicio + '</td>' +
-                '<td contenteditable="true">' + p.fim + '</td>' +
-                '<td style="text-align:right" contenteditable="true">' + fmtN(p.duracao_h, 2) + ' h</td>' +
-                '<td>—</td>';
+        var faixa = _faixa(p.inicio);
+        var faixa_html = '<span style="display:inline-block;font-size:7px;padding:1px 5px;border-radius:3px;font-weight:500;background:' + faixa[1] + ';color:' + faixa[2] + '">' + faixa[0] + '</span>';
+        var row = '<tr><td><span class="chip warn">Parada Parcial</span></td>' +
+                  '<td>' + p.inversor + '</td>' +
+                  '<td>' + p.inicio + '</td>' +
+                  '<td>' + p.fim + '</td>' +
+                  '<td style="text-align:right">' + fmtN(p.duracao_h, 2) + ' h</td>' +
+                  '<td>' + faixa_html + '</td>';
         if (is_tier1) {
-          html += '<td contenteditable="true">' + (p.causa || '---') + '</td>' +
-                  '<td contenteditable="true">' + (p.responsavel || '---') + '</td>';
+          row += '<td>' + (p.causa || '---') + '</td>' +
+                 '<td>' + (p.responsavel || '---') + '</td>';
         }
-        html += '<td><span class="dot closed"></span><span>Fechado</span></td></tr>';
+        row += '<td><span class="dot closed"></span><span>Fechado</span></td></tr>';
+        allRows.push(row);
       });
     }
-    tbody.innerHTML = html;
+
+    // Distribui rows entre tbodies (35 por pagina, como no Python)
+    var ROWS_PER_PAGE = 35;
+    tbodies.forEach(function(tb, i){
+      var start = i * ROWS_PER_PAGE;
+      var end = start + ROWS_PER_PAGE;
+      var slice = allRows.slice(start, end);
+      // Se nao ha tbody dedicada (so 1 tbody = pagina 5 inicial), poe todas
+      if (tbodies.length === 1) slice = allRows;
+      tb.innerHTML = slice.length ? slice.join('') : '';
+    });
   }
 
   function atualizarCharts(kpis) {

@@ -1336,14 +1336,14 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
                 '<div class="val sm" data-kpi="receita" data-fmt="rs">'+rec_s+'</div>'
                 '<div class="unit" contenteditable="true">Tarifa: '+tar_s+'</div></div>'
               '<div class="kpi yw"><div class="lbl" contenteditable="true">POA Medido</div>'
-                '<div class="val sm" contenteditable="true">'+poa_s+'</div>'
-                '<div class="unit" contenteditable="true">Variação: '+varp_s+' (PVsyst: '+glinc_s+')</div></div>'
+                '<div class="val sm" data-kpi="poa" data-fmt="poa_kwh">'+poa_s+'</div>'
+                '<div class="unit"><span contenteditable="true">Variação:</span> <span data-kpi="var_poa" data-fmt="p1">'+varp_s+'</span> <span contenteditable="true">(PVsyst: '+glinc_s+')</span></div></div>'
             '</div>'
           '</div>'
           '<div class="panel"><div class="panel-title" contenteditable="true">Leitura Técnica</div>'
             '<div class="tech-list">'
               '<div class="tech-item"><div class="th">Fórmula do PR</div>'
-                '<div class="tx" contenteditable="true">'+pr_formula+' = '+pr_s+'</div></div>'
+                '<div class="tx" data-tech="pr_formula">'+pr_formula+' = '+pr_s+'</div></div>'
               '<div class="tech-item"><div class="th">Fonte POA</div>'
                 '<div class="tx" contenteditable="true">'+fonte_poa+'</div></div>'
             '</div>'
@@ -1399,9 +1399,9 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<div class="stat"><div class="lbl">Cobertura</div>'
                 '<div class="val ok" contenteditable="true">'+fmt_p(cob_pct)+'</div></div>'
               '<div class="stat"><div class="lbl">POA Total</div>'
-                '<div class="val" contenteditable="true">'+poa_s+'</div></div>'
+                '<div class="val" data-kpi="poa" data-fmt="poa_kwh">'+poa_s+'</div></div>'
               '<div class="stat"><div class="lbl">Var. vs PVsyst</div>'
-                '<div class="val warn" contenteditable="true">'+varp_s+'</div></div>'
+                '<div class="val warn" data-kpi="var_poa" data-fmt="p1_signed">'+varp_s+'</div></div>'
             '</div>'
           '</div>'
           '<div class="panel"><div class="panel-title" contenteditable="true">Distribuição Diária de Geração</div>'
@@ -1561,7 +1561,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
             '<th>Categoria</th><th>Equipamento</th><th>Início</th><th>Fim</th>'
             '<th style="text-align:right">Duração</th><th>Faixa</th>'
             '<th>Causa</th><th>Responsável</th><th>Status</th>'
-            '</tr></thead><tbody>')
+            '</tr></thead><tbody data-tbl="ocorrencias">')
         for tp in range(n_table_pages):
             chunk = al_row_list[tp*ROWS_PER_PAGE:(tp+1)*ROWS_PER_PAGE]
             pg_num = str(6+tp)
