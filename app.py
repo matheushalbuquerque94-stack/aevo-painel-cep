@@ -549,14 +549,19 @@ def load_alertas(pid,ano,mes):
                "ORDER BY horas DESC")
 
 def load_inverter_daily_banco(pid,ano,mes):
-    return sql("SELECT ide.day::date AS dia,ide.device_id,da.name AS inversor,"
-               "ROUND(ide.daily_energy::numeric,2) AS energia_kwh "
-               "FROM public.inverter_daily_energy ide "
-               "LEFT JOIN public.device_asset da ON ide.device_id=da.id "
-               "WHERE ide.device_plant_id="+str(pid)+" "
-               "AND EXTRACT(YEAR FROM ide.day)="+str(ano)+" "
-               "AND EXTRACT(MONTH FROM ide.day)="+str(mes)+" "
-               "ORDER BY ide.day,da.name")
+    """Fallback para o AEVO. A tabela public.inverter_daily_energy nao existe
+    no schema atual — retorna DF vazio para o caller fazer fallback gracioso."""
+    try:
+        return sql("SELECT ide.day::date AS dia,ide.device_id,da.name AS inversor,"
+                   "ROUND(ide.daily_energy::numeric,2) AS energia_kwh "
+                   "FROM public.inverter_daily_energy ide "
+                   "LEFT JOIN public.device_asset da ON ide.device_id=da.id "
+                   "WHERE ide.device_plant_id="+str(pid)+" "
+                   "AND EXTRACT(YEAR FROM ide.day)="+str(ano)+" "
+                   "AND EXTRACT(MONTH FROM ide.day)="+str(mes)+" "
+                   "ORDER BY ide.day,da.name")
+    except Exception:
+        return pd.DataFrame()
 
 def load_poa_banco(pid,ano,mes):
     """Busca POA medido do banco (sensor_reading dp=42) e GHI (dp=40)"""
