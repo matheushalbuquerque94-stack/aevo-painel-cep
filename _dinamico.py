@@ -498,28 +498,77 @@ JS_BUNDLE = r"""
       p2.innerHTML = partes.join(' ');
     }
 
-    // PAG 3 — Análise por Equipamento
+    // PAG 3 — Análise por Equipamento (com agrupamento por modelo)
     var p3 = document.querySelector('[data-analysis="page3"]');
     if (p3) {
       var partes = [];
       var n = kpis.df_inv.length;
-      partes.push('<b>' + n + ' inversor(es) ativo(s)</b> compõem este relatório' +
+      partes.push('<b>' + n + ' inversor(es) ativo(s)</b>' +
                   (kpis.n_inv_orig > n ? ' (' + (kpis.n_inv_orig - n) + ' excluído(s) da análise).' : '.'));
+
       if (n > 0) {
-        var melhor = kpis.df_inv[0];
-        var pior = kpis.df_inv[n-1];
-        partes.push('Melhor desempenho: <b>' + melhor.inversor + '</b> com ' + fmtN(melhor.energia_kwh, 0) +
-                    ' kWh (' + (melhor.desvio_media > 0 ? '+' : '') + fmtN(melhor.desvio_media, 1) + '% vs média).');
-        if (n > 1) {
-          partes.push('Menor desempenho: <b>' + pior.inversor + '</b> com ' + fmtN(pior.energia_kwh, 0) +
-                      ' kWh (' + fmtN(pior.desvio_media, 1) + '% vs média).');
-        }
-        var criticos = kpis.df_inv.filter(function(x){ return x.desvio_media < -10; });
-        if (criticos.length > 0) {
-          partes.push('<b>' + criticos.length + ' inversor(es) com desvio crítico</b> (mais de 10% abaixo da média): ' +
-                      criticos.map(function(x){return x.inversor;}).join(', ') + '.');
-        } else if (n > 1) {
-          partes.push('Nenhum inversor apresenta desvio crítico (>10% abaixo da média).');
+        // Agrupa por modelo
+        var por_modelo = {};
+        kpis.df_inv.forEach(function(inv){
+          var m = (inv.modelo || 'sem_modelo').toString().trim() || 'sem_modelo';
+          if (!por_modelo[m]) por_modelo[m] = [];
+          por_modelo[m].push(inv);
+        });
+        var modelos = Object.keys(por_modelo);
+        var ums_so = modelos.length === 1;
+
+        if (ums_so) {
+          // Caso simples: todos do mesmo modelo — analise global
+          var modelo_nome = modelos[0];
+          partes.push('Todos do modelo <b>' + modelo_nome + '</b> — comparação direta entre os inversores:');
+          var melhor = kpis.df_inv[0];
+          var pior = kpis.df_inv[n-1];
+          partes.push('Melhor: <b>' + melhor.inversor + '</b> com ' + fmtN(melhor.energia_kwh, 0) +
+                      ' kWh (' + (melhor.desvio_media > 0 ? '+' : '') + fmtN(melhor.desvio_media, 1) + '% vs média).');
+          if (n > 1) {
+            partes.push('Pior: <b>' + pior.inversor + '</b> com ' + fmtN(pior.energia_kwh, 0) +
+                        ' kWh (' + fmtN(pior.desvio_media, 1) + '% vs média).');
+          }
+          var criticos = kpis.df_inv.filter(function(x){ return x.desvio_media < -10; });
+          if (criticos.length > 0) {
+            partes.push('<b>' + criticos.length + ' inversor(es) com desvio crítico</b> (>10% abaixo da média): ' +
+                        criticos.map(function(x){return x.inversor;}).join(', ') + '.');
+          } else if (n > 1) {
+            partes.push('Nenhum inversor com desvio crítico.');
+          }
+        } else {
+          // Caso composto: múltiplos modelos
+          var partes_modelo = [];
+          modelos.sort();
+          modelos.forEach(function(m){
+            var grupo = por_modelo[m];
+            var grupo_n = grupo.length;
+            var med_grp = grupo.reduce(function(s,x){return s+x.energia_kwh;},0) / grupo_n;
+            // Recalcula desvio dentro do grupo
+            grupo.forEach(function(x){
+              x.desvio_grupo = med_grp ? Math.round((x.energia_kwh - med_grp)/med_grp*1000)/10 : 0;
+            });
+            // Ordena por energia desc
+            var g_sorted = grupo.slice().sort(function(a,b){return b.energia_kwh - a.energia_kwh;});
+            if (grupo_n === 1) {
+              partes_modelo.push('<b>' + m + '</b>: 1 inversor (' + g_sorted[0].inversor + ') — sem base de comparação.');
+            } else {
+              var melhor_g = g_sorted[0];
+              var pior_g = g_sorted[grupo_n-1];
+              var t = '<b>' + m + '</b> (' + grupo_n + ' inv, média ' + fmtN(med_grp, 0) + ' kWh): ' +
+                      'melhor <b>' + melhor_g.inversor + '</b> ' + fmtN(melhor_g.energia_kwh, 0) +
+                      ' kWh (' + (melhor_g.desvio_grupo > 0 ? '+' : '') + fmtN(melhor_g.desvio_grupo, 1) + '%), ' +
+                      'pior <b>' + pior_g.inversor + '</b> ' + fmtN(pior_g.energia_kwh, 0) +
+                      ' kWh (' + fmtN(pior_g.desvio_grupo, 1) + '%).';
+              var crit_g = g_sorted.filter(function(x){ return x.desvio_grupo < -10; });
+              if (crit_g.length > 0) {
+                t += ' <b>' + crit_g.length + ' crítico(s)</b>: ' + crit_g.map(function(x){return x.inversor;}).join(', ') + '.';
+              }
+              partes_modelo.push(t);
+            }
+          });
+          partes.push('<b>Múltiplos modelos detectados</b> — análise feita dentro de cada grupo (modelos têm potências nominais distintas, comparação cruzada não é técnica).');
+          partes.push(partes_modelo.join('<br/>• '));
         }
       }
       p3.innerHTML = partes.join(' ');
