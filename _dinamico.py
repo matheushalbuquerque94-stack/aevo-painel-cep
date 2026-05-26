@@ -413,7 +413,7 @@ JS_BUNDLE = r"""
       var raw_poa = window.__RAW_DATA.estado_inicial.poa_kwh_m2 || 0;
       var raw_fonte = window.__RAW_DATA.estado_inicial.poa_fonte || 'Sem POA';
       if (state_poa > 0 && Math.abs(state_poa - raw_poa) > 0.001) {
-        el.textContent = 'Manual (editado no HTML)';
+        el.textContent = 'Medido';
       } else if (state_poa > 0) {
         el.textContent = raw_fonte;
       } else {

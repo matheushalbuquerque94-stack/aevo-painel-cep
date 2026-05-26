@@ -1961,7 +1961,7 @@ def coletar_do_supabase(pid, ano, mes):
         "disp_op_media": float(disp_o or 0), "disp_dia_inv": disp_dia_inv,
         "kpis": kpis, "kpis_5est": kpis_5est,
         "poa": float(poa or 0), "fonte_poa": poa_fonte or "n/a",
-        "fonte_energia": "Supabase (cache ETL)",
+        "fonte_energia": "BD AEVO",
         "notes": ["lido do supabase"],
         "_from_supabase": True,
     }
