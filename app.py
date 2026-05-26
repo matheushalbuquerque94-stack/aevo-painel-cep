@@ -1613,6 +1613,11 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
                                        ano, mes, disp_dia_inv)
     _raw_json = _json_mod.dumps(_raw_dataset, ensure_ascii=False)
     _vocab_json = _json_mod.dumps(_VOCAB_DEFAULT, ensure_ascii=False)
+    try:
+        from _dinamico import render_dinamico_js
+        _dinamico_js = render_dinamico_js()
+    except Exception:
+        _dinamico_js = ""
     html += ('<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
              '<script id="__vocab_default__" type="application/json">' + _vocab_json + '</script>'
              '<script>'
@@ -1625,7 +1630,8 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
              '  paradas_editadas: {},'
              '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT))'
              '};'
-             '</script>')
+             '</script>'
+             '<script>' + _dinamico_js + '</script>')
 
     # Scripts Chart.js
     html+=('<script>window.addEventListener("load",function(){'
