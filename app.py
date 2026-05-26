@@ -1914,8 +1914,18 @@ def coletar_do_supabase(pid, ano, mes):
     df_inv["pct"] = (df_inv["energia_kwh"]/total_en*100).round(1) if total_en else 0
     df_inv["esp_kwh_kwp"] = (df_inv["energia_kwh"]/(kwp/len(df_inv))).round(2) if (kwp and len(df_inv)) else 0
     df_inv["disp_ger_pct"] = (df_inv["dias_com_dado"]/dias_mes*100).round(1)
-    df_inv["disp_op_pct"] = 0.0
-    df_inv["horas_off"] = 0.0
+    # Reconstroi horas_off e disp_op_pct a partir das paradas (Supabase)
+    horas_off_lookup = {}
+    if not df_paradas.empty:
+        for _, r in df_paradas.iterrows():
+            inv = str(r["inversor"])
+            horas_off_lookup[inv] = horas_off_lookup.get(inv, 0.0) + float(r.get("duracao_h", 0))
+    HORAS_SOLARES_POR_DIA = 11.5  # mesmo intervalo do isc_5estados_mensal
+    horas_solares_inv = dias_mes * HORAS_SOLARES_POR_DIA
+    df_inv["horas_off"] = df_inv["inversor"].apply(
+        lambda nm: round(horas_off_lookup.get(str(nm), 0.0), 2))
+    df_inv["disp_op_pct"] = df_inv["horas_off"].apply(
+        lambda h: round((1 - h/horas_solares_inv)*100, 2) if horas_solares_inv > 0 else 0.0)
     df_inv = df_inv.sort_values("energia_kwh", ascending=False).reset_index(drop=True)
     df_dia = df_daily.groupby("dia")["energia_kwh"].sum().reset_index()
 
