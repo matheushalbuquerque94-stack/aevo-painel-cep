@@ -1448,7 +1448,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<th style="text-align:right" contenteditable="true">Hrs Off</th>'
               '<th style="text-align:right" contenteditable="true">Desv. Média</th>'
               '<th style="text-align:right" contenteditable="true">Desv. Melhor</th>'
-            '</tr></thead><tbody>'+inv_rows+'</tbody></table>'
+            '</tr></thead><tbody data-tbl="inversores">'+inv_rows+'</tbody></table>'
           '</div>'
         '</div>'
         '<div class="fcol">'
@@ -1499,12 +1499,12 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<span><span class="ld" style="background:#E45C54"></span>Eq/O&amp;M '+pct_om_s+'</span>'
               '</div></div>'
             '<div class="chart"><div class="chart-title">Horas OFF por causa</div>'
-              '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:2px 0">'+_hpc+'</div>'
+              '<div data-section="horas-causa" style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:2px 0">'+_hpc+'</div>'
               '<div class="chart-leg"><span><span class="ld" style="background:#0F9ED5"></span>Concessionária</span>'
               '<span><span class="ld" style="background:#E45C54"></span>Equip./O&amp;M</span>'
               '</div></div>'
             '<div class="chart"><div class="chart-title">Equipamentos com mais eventos</div>'
-              '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:2px 0">'+rank_ev+'</div></div>'
+              '<div data-section="rank-equipamentos" style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:2px 0">'+rank_ev+'</div></div>'
             '<div class="chart"><div class="chart-title">Distribuição horária por responsável</div>'
               '<div style="flex:1;position:relative;min-height:0"><canvas id="ch_hora5"></canvas></div>'
               '<div class="chart-leg"><span><span class="ld" style="background:#0F9ED5"></span>Concessionária</span>'
@@ -1532,7 +1532,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
               '<table><thead><tr>'
                 '<th>Categoria</th><th>Equipamento</th><th>Início</th><th>Fim</th>'
                 '<th style="text-align:right">Duração</th><th>Faixa</th><th>Status</th>'
-              '</tr></thead><tbody>'+al_rows+'</tbody></table></div></div>'
+              '</tr></thead><tbody data-tbl="ocorrencias">'+al_rows+'</tbody></table></div></div>'
             '<div class="fcol">'
               '<div class="panel"><div class="panel-title">Resumo do Período</div>'
                 '<div class="stat-g2">'
@@ -1614,11 +1614,14 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
     _raw_json = _json_mod.dumps(_raw_dataset, ensure_ascii=False)
     _vocab_json = _json_mod.dumps(_VOCAB_DEFAULT, ensure_ascii=False)
     try:
-        from _dinamico import render_dinamico_js
-        _dinamico_js = render_dinamico_js()
+        from _dinamico import render_dinamico_css, render_dinamico_drawer_html, render_dinamico_js
+        _dyn_css = render_dinamico_css()
+        _dyn_drawer = render_dinamico_drawer_html()
+        _dyn_js = render_dinamico_js()
     except Exception:
-        _dinamico_js = ""
-    html += ('<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
+        _dyn_css = ""; _dyn_drawer = ""; _dyn_js = ""
+    html += ('<style>' + _dyn_css + '</style>' + _dyn_drawer +
+             '<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
              '<script id="__vocab_default__" type="application/json">' + _vocab_json + '</script>'
              '<script>'
              'window.__RAW_DATA = JSON.parse(document.getElementById("__raw_data__").textContent);'
@@ -1631,7 +1634,7 @@ def gerar_html(cad,kpis,alertas,df_paradas,tarifa,obs,pvsyst,
              '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT))'
              '};'
              '</script>'
-             '<script>' + _dinamico_js + '</script>')
+             '<script>' + _dyn_js + '</script>')
 
     # Scripts Chart.js
     html+=('<script>window.addEventListener("load",function(){'
