@@ -2366,7 +2366,13 @@ with st.sidebar:
     st.markdown("### Outros")
     tarifa_input=st.number_input("Tarifa R$/kWh",min_value=0.0,value=0.0,step=0.001,format="%.4f")
     obs_input=st.text_area("Observacoes tecnicas",height=80)
-    run=st.button("Carregar dados",use_container_width=True,type="primary")
+    _btn_carregar = st.button("Carregar dados",use_container_width=True,type="primary")
+    # Persistir estado entre reruns (radio/widgets nao perdem os dados)
+    # — quando usina/ano/mes muda, key muda e dados sao re-carregados.
+    _curr_load_key = "%s_%s_%s" % (pid, ano, mes)
+    if _btn_carregar:
+        st.session_state["loaded_key"] = _curr_load_key
+    run = (st.session_state.get("loaded_key") == _curr_load_key)
     st.divider()
     if os.path.exists(_CACHE_DIR):
         _n_cache=len([f for f in os.listdir(_CACHE_DIR) if f.endswith(".pkl")])
