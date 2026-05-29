@@ -351,6 +351,10 @@ def render_resumo(cliente_nome, plant_name, ano, mes, kpis, pvsyst,
         pr_real = (er / kwp) / poa * 100
     # PR pode estar em escala 0-1 ou 0-100; normaliza para %
     if pr_real > 0 and pr_real < 2: pr_real = pr_real * 100
+    # Sanity: PR > 120% = POA invalido (incompleto). Marca como inconsistente.
+    pr_real_s = _fmt_p(pr_real, 2) if 0 < pr_real <= 120 else "—"
+    # POA invalido tambem
+    poa_s = _fmt_n(poa, 2) if poa >= 50 else "—"  # < 50 kWh/m² no mes = invalido
     p50 = float(pvsyst.get("p50") or 0)
     p75 = float(pvsyst.get("p75") or 0)
     desv_p50 = ((er - p50) / p50 * 100) if p50 else 0
@@ -390,10 +394,10 @@ def render_resumo(cliente_nome, plant_name, ano, mes, kpis, pvsyst,
           <tr>
             <td>{plant_name}</td>
             <td class="num" data-kpi="energia_real" data-fmt="n2">{_fmt_n(er, 2)}</td>
-            <td class="num" data-kpi="poa" data-fmt="n2">{_fmt_n(poa, 2)}</td>
-            <td class="num" data-kpi="pr_real" data-fmt="p2">{_fmt_p(pr_real, 2)}</td>
-            <td class="num">{_fmt_signed_pct(desv_p50, 2)}</td>
-            <td class="num">{_fmt_signed_pct(desv_p90, 2)}</td>
+            <td class="num" data-kpi="poa" data-fmt="n2">{poa_s}</td>
+            <td class="num" data-kpi="pr_real" data-fmt="p2">{pr_real_s}</td>
+            <td class="num">{_fmt_signed_pct(desv_p50, 2) if p50 else "—"}</td>
+            <td class="num">{_fmt_signed_pct(desv_p90, 2) if p75 else "—"}</td>
           </tr>
         </tbody>
       </table>
@@ -432,6 +436,11 @@ def render_usina_resumo(cliente_nome, plant_name, ano, mes,
         pr_real = (er / kwp) / poa_med * 100
     if pr_real > 0 and pr_real < 2: pr_real = pr_real * 100
     if pr_pv > 0 and pr_pv < 2: pr_pv = pr_pv * 100
+    # Sanity: PR > 120% ou POA < 50 kWh/m² no mes = inconsistente
+    poa_med_valid = poa_med >= 50
+    pr_real_valid = 0 < pr_real <= 120
+    poa_med_s = _fmt_n(poa_med, 2) if poa_med_valid else "—"
+    pr_real_s = _fmt_n(pr_real, 2) if pr_real_valid else "—"
 
     def _desv(med, pv):
         if not pv: return 0
@@ -481,15 +490,15 @@ def render_usina_resumo(cliente_nome, plant_name, ano, mes,
             <td class="cat">MEDIDO</td>
             <td class="num" data-kpi="energia_real" data-fmt="n2">{_fmt_n(er, 2)}</td>
             <td class="num" data-kpi="disp_ger" data-fmt="p2">{_fmt_n(disp_op_media, 2)}</td>
-            <td class="num" data-kpi="poa" data-fmt="n2">{_fmt_n(poa_med, 2)}</td>
-            <td class="num" data-kpi="pr_real" data-fmt="p2">{_fmt_n(pr_real, 2)}</td>
+            <td class="num" data-kpi="poa" data-fmt="n2">{poa_med_s}</td>
+            <td class="num" data-kpi="pr_real" data-fmt="p2">{pr_real_s}</td>
           </tr>
           <tr class="desvio-row">
             <td class="cat">DESVIO</td>
-            <td class="num">{_fmt_signed_pct(desv_ger, 2)}</td>
+            <td class="num">{_fmt_signed_pct(desv_ger, 2) if e_grid_pv else "—"}</td>
             <td class="num">{_fmt_signed_pct(desv_disp, 2)}</td>
-            <td class="num">{_fmt_signed_pct(desv_poa, 2)}</td>
-            <td class="num">{_fmt_signed_pct(desv_pr, 2)}</td>
+            <td class="num">{_fmt_signed_pct(desv_poa, 2) if (poa_med_valid and poa_pv) else "—"}</td>
+            <td class="num">{_fmt_signed_pct(desv_pr, 2) if (pr_real_valid and pr_pv) else "—"}</td>
           </tr>
         </tbody>
       </table>
