@@ -2583,14 +2583,24 @@ if run:
         st.components.v1.html(html,height=700,scrolling=True)
 
     st.divider()
-    # ── Seletor de tipo de relatorio ──────────────────────────────────────
-    modo_rel = st.radio(
-        "Tipo de relatório",
-        ["Detalhado (operacional)", "Executivo (A4 retrato)"],
-        horizontal=True, key="modo_relatorio",
-        help="Detalhado: layout operacional com todos os gráficos. "
-             "Executivo: layout A4 retrato, formato cliente (resumo + KPIs + tabela diária + ocorrências)."
-    )
+    # ── Seletor de tipo de relatorio (DESTACADO) ────────────────────────────
+    st.markdown("### 📄 Gerar relatório")
+    col_mode, col_info = st.columns([2, 1])
+    with col_mode:
+        modo_rel = st.radio(
+            "**Escolha o formato do relatório:**",
+            ["Detalhado (operacional)", "✨ Executivo (A4 retrato — modelo cliente)"],
+            horizontal=False, key="modo_relatorio",
+            help="Detalhado: layout operacional com todos os gráficos. "
+                 "Executivo: layout A4 retrato no estilo do PDF modelo (capa + sumário + sobre AEVO + disclaimer + tabela comparativa + tabela diária + análise de ocorrências)."
+        )
+    with col_info:
+        if modo_rel.startswith("✨"):
+            st.success("✨ **Modo Executivo**\n\n9 páginas A4 retrato\nideal para impressão e envio ao cliente")
+        else:
+            st.info("📊 **Modo Detalhado**\n\nLayout operacional completo\nlandscape com gráficos")
+    # Normaliza valor (remove emoji do prefixo p/ check)
+    if "Executivo" in modo_rel: modo_rel = "Executivo (A4 retrato)"
     if modo_rel.startswith("Executivo"):
         # Reusa data ja calculado, chama o renderer executivo direto
         try:
