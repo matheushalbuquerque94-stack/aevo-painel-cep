@@ -2566,49 +2566,28 @@ if run:
         c5.metric("Cobertura Dados","%.1f%%"%dg)
         c6.metric("Receita Est.","R$ {:,.2f}".format(receita) if receita else "---")
 
-    t1,t2,t3,t4=st.tabs(["Inversores","Paradas Detectadas","Alertas","Preview"])
-    with t1:
-        st.caption("Fonte: "+fonte_energia)
-        cols_show=["inversor","energia_kwh","esp_kwh_kwp","pct","disp_ger_pct","disp_op_pct","horas_off"]
-        if kpis_5est and kpis_5est.get("tier")==1:
-            cols_show+=["pct_conc","pct_om"]
-        cols_show=[c for c in cols_show if c in df_inv.columns]
-        st.dataframe(df_inv[cols_show].rename(columns={
-            "inversor":"Inversor","energia_kwh":"Energia (kWh)","esp_kwh_kwp":"Esp. kWh/kWp",
-            "pct":"% Total","disp_ger_pct":"Cob. Dados %","disp_op_pct":"Disp. Op. %","horas_off":"Horas Off"}),
-            use_container_width=True,hide_index=True)
-    with t2:
-        if df_paradas.empty: st.info("Nenhuma parada parcial detectada.")
-        else: st.dataframe(df_paradas,use_container_width=True,hide_index=True)
-    with t3:
-        if df_al.empty: st.info("Nenhuma ocorrencia no banco.")
-        else: st.dataframe(df_al,use_container_width=True,hide_index=True)
-    with t4:
-        html=gerar_html(cad,kpis,df_al,df_paradas,tarifa_input,obs_input,pvsyst,
-                        ano,mes,charts,tem_estacao,poa,fonte_poa,disp_op_media,fonte_energia,kpis_5est,disp_dia_inv,df_daily)
-        st.components.v1.html(html,height=700,scrolling=True)
-
-    st.divider()
-    # ── Seletor de tipo de relatorio (DESTACADO) ────────────────────────────
-    st.markdown("### 📄 Gerar relatório")
+    # ── Seletor de tipo de relatorio (DESTACADO) ─ ANTES DAS ABAS ──
+    st.markdown("### 📄 Tipo de relatório")
     col_mode, col_info = st.columns([2, 1])
     with col_mode:
         modo_rel = st.radio(
             "**Escolha o formato do relatório:**",
             ["Detalhado (operacional)", "✨ Executivo (A4 retrato — modelo cliente)"],
             horizontal=False, key="modo_relatorio",
-            help="Detalhado: layout operacional com todos os gráficos. "
-                 "Executivo: layout A4 retrato no estilo do PDF modelo (capa + sumário + sobre AEVO + disclaimer + tabela comparativa + tabela diária + análise de ocorrências)."
+            help="Detalhado: layout operacional com todos os gráficos (paisagem). "
+                 "Executivo: layout A4 retrato no estilo PDF cliente (9 páginas)."
         )
     with col_info:
-        if modo_rel.startswith("✨"):
-            st.success("✨ **Modo Executivo**\n\n9 páginas A4 retrato\nideal para impressão e envio ao cliente")
+        if "Executivo" in modo_rel:
+            st.success("✨ **Modo Executivo**\n\n9 páginas A4 retrato\nIdeal para envio ao cliente")
         else:
-            st.info("📊 **Modo Detalhado**\n\nLayout operacional completo\nlandscape com gráficos")
-    # Normaliza valor (remove emoji do prefixo p/ check)
-    if "Executivo" in modo_rel: modo_rel = "Executivo (A4 retrato)"
-    if modo_rel.startswith("Executivo"):
-        # Reusa data ja calculado, chama o renderer executivo direto
+            st.info("📊 **Modo Detalhado**\n\nLayout operacional completo\nPaisagem com gráficos")
+    # Normaliza valor
+    if "Executivo" in modo_rel: modo_rel_norm = "Executivo (A4 retrato)"
+    else: modo_rel_norm = "Detalhado (operacional)"
+
+    # Gera HTML conforme escolha (uma unica vez — usado em preview + download)
+    if modo_rel_norm.startswith("Executivo"):
         try:
             import _executivo as _exec_mod
             import json as _jsonmod_inline
@@ -2619,9 +2598,8 @@ if run:
                 "fonte_poa": fonte_poa, "fonte_energia": fonte_energia,
                 "disp_op_media": disp_op_media, "disp_dia_inv": disp_dia_inv,
             }
-            css = _exec_mod.render_executivo_css()
-            body = _exec_mod.render_executivo_html(data_pkg, ano, mes, logo_b64=LOGO_B64)
-            # Drawer dinamico opcional
+            _css_e = _exec_mod.render_executivo_css()
+            _body_e = _exec_mod.render_executivo_html(data_pkg, ano, mes, logo_b64=LOGO_B64)
             try:
                 _raw_dataset = _build_raw_dataset(
                     cad, kpis, kpis_5est, df_daily, df_paradas, pvsyst,
@@ -2630,7 +2608,7 @@ if run:
                 _vocab_json = _jsonmod_inline.dumps(_VOCAB_DEFAULT, ensure_ascii=False)
                 from _dinamico import (render_dinamico_css, render_dinamico_drawer_html,
                                           render_dinamico_js)
-                drawer_block = (
+                _drawer_block = (
                     '<style>' + render_dinamico_css() + '</style>' +
                     render_dinamico_drawer_html() +
                     '<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
@@ -2649,40 +2627,66 @@ if run:
                     '</script>'
                     '<script>' + render_dinamico_js() + '</script>'
                 )
-            except Exception as _e_dyn:
-                print("[executivo] drawer falhou:", _e_dyn); drawer_block = ""
-            head_exec = (
+            except Exception:
+                _drawer_block = ""
+            _head_e = (
                 '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
-                f'<title>Relatorio Mensal — {cad.get("name", "UFV")} — {mes:02d}/{ano}</title>'
+                '<title>Relatorio Mensal — ' + str(cad.get("name", "UFV")) + ' — ' + str(mes).zfill(2) + '/' + str(ano) + '</title>'
                 '<link rel="preconnect" href="https://fonts.googleapis.com">'
                 '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
                 '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'
-                '<style>' + css + '</style></head>'
+                '<style>' + _css_e + '</style></head>'
             )
-            html = head_exec + body + drawer_block + '</html>'
+            html_relatorio = _head_e + _body_e + _drawer_block + '</html>'
             filename = "relatorio_exec_" + str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15] + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
         except Exception as e_exec:
-            st.error(f"Falha ao gerar relatorio executivo: {e_exec}")
-            html = gerar_html(cad, kpis, df_al, df_paradas, tarifa_input, obs_input, pvsyst,
-                              ano, mes, charts, tem_estacao, poa, fonte_poa, disp_op_media,
-                              fonte_energia, kpis_5est, disp_dia_inv, df_daily)
+            st.error("Falha modo executivo: " + str(e_exec))
+            html_relatorio = gerar_html(cad, kpis, df_al, df_paradas, tarifa_input, obs_input, pvsyst,
+                                         ano, mes, charts, tem_estacao, poa, fonte_poa, disp_op_media,
+                                         fonte_energia, kpis_5est, disp_dia_inv, df_daily)
             filename = "relatorio_" + str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15] + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
     else:
-        html = gerar_html(cad, kpis, df_al, df_paradas, tarifa_input, obs_input, pvsyst,
-                          ano, mes, charts, tem_estacao, poa, fonte_poa, disp_op_media,
-                          fonte_energia, kpis_5est, disp_dia_inv, df_daily)
+        html_relatorio = gerar_html(cad, kpis, df_al, df_paradas, tarifa_input, obs_input, pvsyst,
+                                     ano, mes, charts, tem_estacao, poa, fonte_poa, disp_op_media,
+                                     fonte_energia, kpis_5est, disp_dia_inv, df_daily)
         filename = "relatorio_" + str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15] + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
 
-    st.session_state.html_cache = html
+    st.session_state.html_cache = html_relatorio
     st.session_state.pdf_filename = filename
+
+    t1,t2,t3,t4=st.tabs(["Inversores","Paradas Detectadas","Alertas","🔍 Preview do relatório"])
+    with t1:
+        st.caption("Fonte: "+fonte_energia)
+        cols_show=["inversor","energia_kwh","esp_kwh_kwp","pct","disp_ger_pct","disp_op_pct","horas_off"]
+        if kpis_5est and kpis_5est.get("tier")==1:
+            cols_show+=["pct_conc","pct_om"]
+        cols_show=[c for c in cols_show if c in df_inv.columns]
+        st.dataframe(df_inv[cols_show].rename(columns={
+            "inversor":"Inversor","energia_kwh":"Energia (kWh)","esp_kwh_kwp":"Esp. kWh/kWp",
+            "pct":"% Total","disp_ger_pct":"Cob. Dados %","disp_op_pct":"Disp. Op. %","horas_off":"Horas Off"}),
+            use_container_width=True,hide_index=True)
+    with t2:
+        if df_paradas.empty: st.info("Nenhuma parada parcial detectada.")
+        else: st.dataframe(df_paradas,use_container_width=True,hide_index=True)
+    with t3:
+        if df_al.empty: st.info("Nenhuma ocorrencia no banco.")
+        else: st.dataframe(df_al,use_container_width=True,hide_index=True)
+    with t4:
+        # Preview respeita a escolha do modo (executivo ou detalhado)
+        st.caption(f"Visualizando: **{modo_rel_norm}** — html_relatorio cache ativo")
+        st.components.v1.html(html_relatorio, height=800, scrolling=True)
+
+    st.divider()
+    st.markdown("### ⬇️ Baixar / Gerar PDF")
     col_html,col_pdf=st.columns(2)
     with col_html:
-        st.download_button("⬇️ Baixar HTML",data=html.encode("utf-8"),
-                           file_name=filename,mime="text/html",use_container_width=True)
+        st.download_button("⬇️ Baixar HTML",data=html_relatorio.encode("utf-8"),
+                           file_name=filename,mime="text/html",use_container_width=True,
+                           help="Baixa o HTML do modo selecionado acima")
     with col_pdf:
         if st.button("📋 Gerar PDF",use_container_width=True,type="primary"):
             with st.spinner("Gerando PDF via Playwright... ~5s"):
-                st.session_state.pdf_bytes=html_para_pdf(html)
+                st.session_state.pdf_bytes=html_para_pdf(html_relatorio)
                 st.session_state.pdf_filename=filename.replace(".html",".pdf")
 else:
     st.info("Selecione cliente, usina, ano e mes e clique em Carregar dados.")
