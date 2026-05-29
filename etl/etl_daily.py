@@ -196,24 +196,32 @@ def upsert_kpis(conn, pid, ano, mes, data, total_eventos, total_horas_off, em_ab
     er = kpis.get("energia_real", 0)
     ee = kpis.get("ee", 0)
     poa = data.get("poa", 0)
+    # Helper: converte para float preservando 0.0 (nao vira NULL).
+    # So vira NULL se for None ou string vazia.
+    def _f(v):
+        if v is None: return None
+        try:
+            f = float(v)
+            return f  # preserva 0.0
+        except: return None
     row = (
         pid, ano, mes,
-        float(er) if er else None,
-        float(ee) if ee else None,
-        float(kpis.get("at", 0)) if ee else None,
-        float(kpis.get("pr_real", 0) or 0) or None,
-        float(kpis.get("pr_e", 0) or 0) or None,
-        float(poa) if poa else None,
+        _f(er),
+        _f(ee),
+        _f(kpis.get("at")),
+        _f(kpis.get("pr_real")),
+        _f(kpis.get("pr_e")),
+        _f(poa),
         str(data.get("fonte_poa") or ""),
-        float(kpis5.get("pct_geracao") or 0) or None,
-        float(data.get("disp_op_media") or 0) or None,
-        float(kpis.get("cob_pct") or 0) or None,
+        _f(kpis5.get("pct_geracao")),
+        _f(data.get("disp_op_media")),
+        _f(kpis.get("cob_pct")),
         int(kpis.get("dias_com_dado", 0) or 0),
         int(kpis5.get("tier") or 2),
-        float(kpis5.get("pct_ger_pure") or 0) or None,
-        float(kpis5.get("pct_irr") or 0) or None,
-        float(kpis5.get("pct_conc") or 0) or None,
-        float(kpis5.get("pct_om") or 0) or None,
+        _f(kpis5.get("pct_ger_pure")),
+        _f(kpis5.get("pct_irr")),
+        _f(kpis5.get("pct_conc")),
+        _f(kpis5.get("pct_om")),
         int(total_eventos or 0),
         float(total_horas_off or 0),
         int(em_aberto or 0),

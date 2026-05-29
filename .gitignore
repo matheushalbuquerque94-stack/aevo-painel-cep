@@ -36,6 +36,11 @@ desktop.ini
 # Builds Playwright
 .playwright/
 
+# Arquivos de teste/debug do executivo (gerados localmente)
+test_executivo.*
+_exec_screenshot_*.png
+_test_exec_*.py
+
 # Huawei FusionSolar — dados sensíveis e dumps de PoC (NUNCA versionar)
 huawei/_storage_*.json
 huawei/_screenshots/

@@ -2109,6 +2109,97 @@ def gerar_relatorio_html(pid, ano, mes, poa_manual=0.0, tarifa_input=0.0, obs_in
     status = "OK | fonte: "+fonte_energia+(" | "+", ".join(notes) if notes else "")
     return html, filename, status
 
+
+def gerar_relatorio_executivo_html(pid, ano, mes, poa_manual=0.0, tarifa_input=0.0,
+                                     pv_overrides=None, prefer_supabase=True,
+                                     incluir_drawer=True):
+    """Versao EXECUTIVA do relatorio — formato A4 retrato similar ao modelo PDF cliente.
+
+    Args:
+      pid, ano, mes: identificadores da usina/periodo
+      poa_manual, tarifa_input, pv_overrides: overrides opcionais
+      prefer_supabase: tenta cache Supabase antes de coletar da API
+      incluir_drawer: se True, embute o sistema dinamico de edicao (drawer + JS)
+
+    Returns: (html, filename, status_str)
+    """
+    import _executivo as _exec_mod
+    import json as _json_mod_exec
+
+    data = None
+    if prefer_supabase and poa_manual == 0.0 and not pv_overrides:
+        try: data = coletar_do_supabase(pid, ano, mes)
+        except Exception: data = None
+    if data is None:
+        data = coletar_dados_usina(pid, ano, mes, poa_manual, pv_overrides)
+    if "error" in data:
+        return None, None, "ERRO: " + data["error"]
+
+    cad = data["cad"]
+    fonte_energia = data.get("fonte_energia", "")
+    notes = data.get("notes", []) or []
+    tarifa = tarifa_input or 0.0
+    poa = data.get("poa", 0)
+    fonte_poa = data.get("fonte_poa", "")
+
+    # CSS executivo + (opcional) CSS dinamico do drawer
+    css = _exec_mod.render_executivo_css()
+    body_exec = _exec_mod.render_executivo_html(data, ano, mes, logo_b64=LOGO_B64)
+
+    head = (
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
+        f'<title>Relatório Mensal — {cad.get("name", "UFV")} — {mes:02d}/{ano}</title>'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<link rel="preconnect" href="https://fonts.googleapis.com">'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'
+        '<style>' + css + '</style>'
+        '</head>'
+    )
+
+    # Sistema dinamico opcional (drawer + JS reativo)
+    drawer_block = ""
+    if incluir_drawer:
+        try:
+            _raw_dataset = _build_raw_dataset(
+                cad, data["kpis"], data.get("kpis_5est"), data["df_daily"],
+                data["df_paradas"], data["pvsyst"], tarifa, poa,
+                fonte_poa, fonte_energia, ano, mes, data.get("disp_dia_inv"))
+            _raw_json = _json_mod_exec.dumps(_raw_dataset, ensure_ascii=False)
+            _vocab_json = _json_mod_exec.dumps(_VOCAB_DEFAULT, ensure_ascii=False)
+            from _dinamico import (render_dinamico_css, render_dinamico_drawer_html,
+                                     render_dinamico_js)
+            _dyn_css = render_dinamico_css()
+            _dyn_drawer = render_dinamico_drawer_html()
+            _dyn_js = render_dinamico_js()
+            drawer_block = (
+                '<style>' + _dyn_css + '</style>' + _dyn_drawer +
+                '<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
+                '<script id="__vocab_default__" type="application/json">' + _vocab_json + '</script>'
+                '<script>'
+                'window.__RAW_DATA = JSON.parse(document.getElementById("__raw_data__").textContent);'
+                'window.__VOCAB_DEFAULT = JSON.parse(document.getElementById("__vocab_default__").textContent);'
+                'window.__STATE = {'
+                '  tarifa_rs_kwh: window.__RAW_DATA.estado_inicial.tarifa_rs_kwh,'
+                '  poa_kwh_m2: window.__RAW_DATA.estado_inicial.poa_kwh_m2,'
+                '  inversores_excluidos: [],'
+                '  paradas_editadas: {},'
+                '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT)),'
+                '  usina_overrides: {}'
+                '};'
+                '</script>'
+                '<script>' + _dyn_js + '</script>'
+            )
+        except Exception as e:
+            print(f"  [executivo] drawer dinamico falhou: {e}")
+            drawer_block = ""
+
+    html = head + body_exec + drawer_block + '</html>'
+    nm_curto = str(cad.get("acronym") or cad.get("name", "UFV")).replace(" ", "_")[:15]
+    filename = "relatorio_exec_" + nm_curto + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
+    status = "OK | fonte: " + fonte_energia + (" | " + ", ".join(notes) if notes else "")
+    return html, filename, status
+
 # â\x94\x80â\x94\x80 Streamlit â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80â\x94\x80
 st.set_page_config(page_title="Relatorios OM - Aevo Solar", page_icon="☀️", layout="wide")
 
@@ -2492,9 +2583,80 @@ if run:
         st.components.v1.html(html,height=700,scrolling=True)
 
     st.divider()
-    html=gerar_html(cad,kpis,df_al,df_paradas,tarifa_input,obs_input,pvsyst,
-                    ano,mes,charts,tem_estacao,poa,fonte_poa,disp_op_media,fonte_energia,kpis_5est,disp_dia_inv,df_daily)
-    filename="relatorio_"+str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15]+"_"+str(ano)+"_"+str(mes).zfill(2)+".html"
+    # ── Seletor de tipo de relatorio ──────────────────────────────────────
+    modo_rel = st.radio(
+        "Tipo de relatório",
+        ["Detalhado (operacional)", "Executivo (A4 retrato)"],
+        horizontal=True, key="modo_relatorio",
+        help="Detalhado: layout operacional com todos os gráficos. "
+             "Executivo: layout A4 retrato, formato cliente (resumo + KPIs + tabela diária + ocorrências)."
+    )
+    if modo_rel.startswith("Executivo"):
+        # Reusa data ja calculado, chama o renderer executivo direto
+        try:
+            import _executivo as _exec_mod
+            import json as _jsonmod_inline
+            data_pkg = {
+                "cad": cad, "kpis": kpis, "kpis_5est": kpis_5est,
+                "df_daily": df_daily, "df_paradas": df_paradas, "df_al": df_al,
+                "df_poa_dia": df_poa_dia, "pvsyst": pvsyst, "poa": poa,
+                "fonte_poa": fonte_poa, "fonte_energia": fonte_energia,
+                "disp_op_media": disp_op_media, "disp_dia_inv": disp_dia_inv,
+            }
+            css = _exec_mod.render_executivo_css()
+            body = _exec_mod.render_executivo_html(data_pkg, ano, mes, logo_b64=LOGO_B64)
+            # Drawer dinamico opcional
+            try:
+                _raw_dataset = _build_raw_dataset(
+                    cad, kpis, kpis_5est, df_daily, df_paradas, pvsyst,
+                    tarifa_input, poa, fonte_poa, fonte_energia, ano, mes, disp_dia_inv)
+                _raw_json = _jsonmod_inline.dumps(_raw_dataset, ensure_ascii=False)
+                _vocab_json = _jsonmod_inline.dumps(_VOCAB_DEFAULT, ensure_ascii=False)
+                from _dinamico import (render_dinamico_css, render_dinamico_drawer_html,
+                                          render_dinamico_js)
+                drawer_block = (
+                    '<style>' + render_dinamico_css() + '</style>' +
+                    render_dinamico_drawer_html() +
+                    '<script id="__raw_data__" type="application/json">' + _raw_json + '</script>'
+                    '<script id="__vocab_default__" type="application/json">' + _vocab_json + '</script>'
+                    '<script>'
+                    'window.__RAW_DATA = JSON.parse(document.getElementById("__raw_data__").textContent);'
+                    'window.__VOCAB_DEFAULT = JSON.parse(document.getElementById("__vocab_default__").textContent);'
+                    'window.__STATE = {'
+                    '  tarifa_rs_kwh: window.__RAW_DATA.estado_inicial.tarifa_rs_kwh,'
+                    '  poa_kwh_m2: window.__RAW_DATA.estado_inicial.poa_kwh_m2,'
+                    '  inversores_excluidos: [],'
+                    '  paradas_editadas: {},'
+                    '  vocab: JSON.parse(JSON.stringify(window.__VOCAB_DEFAULT)),'
+                    '  usina_overrides: {}'
+                    '};'
+                    '</script>'
+                    '<script>' + render_dinamico_js() + '</script>'
+                )
+            except Exception as _e_dyn:
+                print("[executivo] drawer falhou:", _e_dyn); drawer_block = ""
+            head_exec = (
+                '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
+                f'<title>Relatorio Mensal — {cad.get("name", "UFV")} — {mes:02d}/{ano}</title>'
+                '<link rel="preconnect" href="https://fonts.googleapis.com">'
+                '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+                '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'
+                '<style>' + css + '</style></head>'
+            )
+            html = head_exec + body + drawer_block + '</html>'
+            filename = "relatorio_exec_" + str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15] + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
+        except Exception as e_exec:
+            st.error(f"Falha ao gerar relatorio executivo: {e_exec}")
+            html = gerar_html(cad, kpis, df_al, df_paradas, tarifa_input, obs_input, pvsyst,
+                              ano, mes, charts, tem_estacao, poa, fonte_poa, disp_op_media,
+                              fonte_energia, kpis_5est, disp_dia_inv, df_daily)
+            filename = "relatorio_" + str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15] + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
+    else:
+        html = gerar_html(cad, kpis, df_al, df_paradas, tarifa_input, obs_input, pvsyst,
+                          ano, mes, charts, tem_estacao, poa, fonte_poa, disp_op_media,
+                          fonte_energia, kpis_5est, disp_dia_inv, df_daily)
+        filename = "relatorio_" + str(cad.get("acronym") or cad.get("name","UFV")).replace(" ","_")[:15] + "_" + str(ano) + "_" + str(mes).zfill(2) + ".html"
+
     st.session_state.html_cache = html
     st.session_state.pdf_filename = filename
     col_html,col_pdf=st.columns(2)
