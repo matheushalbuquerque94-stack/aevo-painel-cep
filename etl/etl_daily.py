@@ -63,6 +63,20 @@ from psycopg2.extras import execute_values  # noqa: E402
 import pandas as pd  # noqa: E402
 import calendar  # noqa: E402
 
+# Huawei FusionSolar (carrega lazy p/ nao quebrar ETL se playwright nao instalado)
+try:
+    from huawei.huawei_map import HUAWEI_MAP
+    from huawei.extract_huawei import (coletar_dados_usina_huawei,
+                                        close_all_clients as _huawei_close,
+                                        set_supabase_conn as _huawei_set_conn)
+    _HUAWEI_OK = True
+except Exception as _e:
+    HUAWEI_MAP = {}
+    _HUAWEI_OK = False
+    _huawei_close = lambda: None
+    _huawei_set_conn = lambda conn: None
+    print(f"Huawei desabilitado (import falhou): {_e}")
+
 # ── Carrega .env ─────────────────────────────────────────────────────────
 def load_env(path):
     """Carrega vars de .env e tambem expoe via os.environ (fallback).
@@ -268,39 +282,48 @@ def processar_usina(conn, pid, ano, mes, triggered_by="manual", force=False):
     t0 = time.time()
     if not force and already_done(conn, pid, ano, mes):
         return ("SKIP", "ja persistido (is_closed=TRUE)", 0, 0, 0)
-    # Pula plantas sem mapping ISC (sem fonte de dados acessivel hoje)
-    if pid not in app.ISC_MAP:
+
+    # Roteamento por fonte: Huawei > ISC > skip
+    is_huawei = _HUAWEI_OK and pid in HUAWEI_MAP
+    is_isc    = pid in app.ISC_MAP
+    if not is_huawei and not is_isc:
         log_fetch(conn, pid, ano, mes, "n/a", "SKIP", 0, 0, 0,
-                  time.time()-t0, "sem ISC mapping", triggered_by)
+                  time.time()-t0, "sem mapping (ISC/Huawei)", triggered_by)
         conn.commit()
-        return ("SKIP", "sem ISC mapping", 0, 0, 0)
-    # Timeout por planta + retry (rate limit ISC pode causar resposta vazia)
-    import threading
-    result_box = {"data": None, "error": None}
-    MAX_RETRIES = 3
-    RETRY_BACKOFF_S = [15, 45, 120]  # espera entre retries
-    for attempt in range(MAX_RETRIES):
+        return ("SKIP", "sem mapping (ISC/Huawei)", 0, 0, 0)
+
+    # Huawei: Playwright sync API NAO eh thread-safe. Chama direto (sem thread).
+    if is_huawei:
         result_box = {"data": None, "error": None}
-        def _coletar():
-            try: result_box["data"] = app.coletar_dados_usina(pid, ano, mes)
-            except Exception as e: result_box["error"] = e
-        th = threading.Thread(target=_coletar, daemon=True)
-        th.start()
-        th.join(timeout=300)
-        # Sucesso: data nao-vazio e sem erro
-        data = result_box.get("data")
-        err = result_box.get("error")
-        # Considera "ISC vazio" como falha que merece retry
-        isc_empty = (data and not data.get("error") and
-                     "ISC sem dados" in " ".join(data.get("notes",[])))
-        if data and not err and not isc_empty:
-            break  # sucesso
-        # Falha — espera e tenta de novo
-        if attempt < MAX_RETRIES - 1:
-            wait = RETRY_BACKOFF_S[attempt]
-            print(f"    retry {attempt+2}/{MAX_RETRIES} em {wait}s (motivo: {'isc_vazio' if isc_empty else (str(err)[:40] if err else 'timeout')})")
-            time.sleep(wait)
-    if th.is_alive():
+        try: result_box["data"] = coletar_dados_usina_huawei(pid, ano, mes)
+        except Exception as e: result_box["error"] = e
+        th = None
+    else:
+        # ISC: timeout + retry (thread OK)
+        import threading
+        result_box = {"data": None, "error": None}
+        MAX_RETRIES = 3
+        RETRY_BACKOFF_S = [15, 45, 120]
+        for attempt in range(MAX_RETRIES):
+            result_box = {"data": None, "error": None}
+            def _coletar():
+                try: result_box["data"] = app.coletar_dados_usina(pid, ano, mes)
+                except Exception as e: result_box["error"] = e
+            th = threading.Thread(target=_coletar, daemon=True)
+            th.start()
+            th.join(timeout=300)
+            data = result_box.get("data")
+            err = result_box.get("error")
+            isc_empty = (data and not data.get("error") and
+                         "ISC sem dados" in " ".join(data.get("notes",[])))
+            if data and not err and not isc_empty:
+                break
+            if attempt < MAX_RETRIES - 1:
+                wait = RETRY_BACKOFF_S[attempt]
+                print(f"    retry {attempt+2}/{MAX_RETRIES} em {wait}s "
+                      f"(motivo: {'isc_vazio' if isc_empty else (str(err)[:40] if err else 'timeout')})")
+                time.sleep(wait)
+    if th and th.is_alive():
         duration = time.time() - t0
         log_fetch(conn, pid, ano, mes, "n/a", "FAIL", 0, 0, 0, duration,
                   "timeout 120s na coleta", triggered_by)
@@ -386,24 +409,35 @@ def main():
 
     print(f"ETL: {len(plantas)} plantas | {args.ano}-{args.mes:02d} | force={args.force}")
     print(f"Supabase: {SB_CONN['host']}:{SB_CONN['port']}/{SB_CONN['dbname']}")
-    conn = sb_connect()
 
     n_ok = n_fail = n_skip = 0
     t_total = time.time()
     for i, (pid, name) in enumerate(plantas, 1):
         t0 = time.time()
+        # Conn fresca por planta: Huawei usa Playwright (lento, +20s) e pooler
+        # Supabase pode matar idle conn. Fresh conn = sempre saudavel.
+        try: conn = sb_connect()
+        except Exception as e:
+            print(f"  [{i:>3}/{len(plantas)}] id={pid} FAIL conexao Supabase: {e}")
+            n_fail += 1; continue
+        # Conecta backup de storage Huawei ao Supabase
+        if _HUAWEI_OK: _huawei_set_conn(conn)
         try:
             status, msg, re_, rp, rd = processar_usina(
                 conn, pid, args.ano, args.mes, args.triggered_by, args.force)
         except Exception as e:
             status = "FAIL"; msg = str(e); re_=rp=rd=0
+        try: conn.close()
+        except: pass
         dt = time.time() - t0
         if status=="OK": n_ok += 1
         elif status=="SKIP": n_skip += 1
         else: n_fail += 1
         print(f"  [{i:>3}/{len(plantas)}] id={pid:<5} {name[:25]:<25} {status:<6} {dt:>5.1f}s  e={re_:<5} p={rp:<4} d={rd:<5}  {msg[:60]}")
 
-    conn.close()
+    # Fecha clientes Huawei (libera browsers Playwright)
+    try: _huawei_close()
+    except: pass
     print(f"\nResumo: OK={n_ok}  SKIP={n_skip}  FAIL={n_fail}  total={len(plantas)}  tempo={time.time()-t_total:.1f}s")
 
 

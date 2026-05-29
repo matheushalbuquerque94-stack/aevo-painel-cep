@@ -36,6 +36,18 @@ desktop.ini
 # Builds Playwright
 .playwright/
 
+# Huawei FusionSolar — dados sensíveis e dumps de PoC (NUNCA versionar)
+huawei/_storage_*.json
+huawei/_screenshots/
+huawei/_api_capture/
+huawei/_walk/
+huawei/_direct/
+huawei/_post_capture/
+huawei/_history_alarm/
+huawei/_alarm_capture/
+huawei/_alarm_history/
+huawei/_mapping_proposta.json
+
 # Pastas locais que nao vao para o repo
 BACKUP/
 *.zip
