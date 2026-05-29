@@ -2599,7 +2599,10 @@ if run:
                 "disp_op_media": disp_op_media, "disp_dia_inv": disp_dia_inv,
             }
             _css_e = _exec_mod.render_executivo_css()
-            _body_e = _exec_mod.render_executivo_html(data_pkg, ano, mes, logo_b64=LOGO_B64)
+            # Passa charts ja calculados (mesmo dict do detalhado) p/ Chart.js
+            _body_e = _exec_mod.render_executivo_html(data_pkg, ano, mes,
+                                                      logo_b64=LOGO_B64,
+                                                      charts=charts)
             try:
                 _raw_dataset = _build_raw_dataset(
                     cad, kpis, kpis_5est, df_daily, df_paradas, pvsyst,

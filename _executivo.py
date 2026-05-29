@@ -190,6 +190,41 @@ def render_executivo_css():
     }
     .ex-obs b { color: #0E2841; }
 
+    /* ── Container de grafico (canvas) ── */
+    .ex-chart-box {
+      background: white; border: .5pt solid #CBD5E1;
+      padding: 4mm; margin: 3mm 0;
+      page-break-inside: avoid;
+    }
+    .ex-chart-box .ex-chart-title {
+      font-size: 10pt; font-weight: 600; color: #0E2841;
+      margin-bottom: 3mm; border-bottom: .5pt solid #E5E7EB; padding-bottom: 2mm;
+    }
+    .ex-chart-canvas { width: 100% !important; }
+    .ex-chart-h-sm  { height: 50mm; }
+    .ex-chart-h-md  { height: 70mm; }
+    .ex-chart-h-lg  { height: 110mm; }
+
+    /* ── Tech specs grid ── */
+    .ex-specs-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 3mm; margin: 4mm 0;
+    }
+    .ex-spec-card {
+      background: #F8FAFC; border: .5pt solid #CBD5E1;
+      border-left: 3pt solid #0E2841;
+      padding: 3mm 4mm;
+    }
+    .ex-spec-card .lbl {
+      font-size: 7.5pt; color: #6B7280; text-transform: uppercase;
+      letter-spacing: .03em; margin-bottom: 1mm;
+    }
+    .ex-spec-card .val {
+      font-size: 12pt; font-weight: 600; color: #0E2841;
+      font-feature-settings: "tnum";
+    }
+    .ex-spec-card .unit { font-size: 9pt; font-weight: 500; color: #6B7280; }
+
     /* ── KPI grid para pagina Tier 1 ── */
     .ex-kpi-grid {
       display: grid; grid-template-columns: repeat(4, 1fr);
@@ -750,8 +785,593 @@ def render_tabela_ocorrencias(cliente_nome, plant_name, ano, mes,
     """
 
 
+# ── PAGINA: ESPECIFICACOES TECNICAS ──────────────────────────────────────
+def render_especificacoes_tecnicas(cliente_nome, plant_name, cad, pvsyst,
+                                     df_inv, logo_b64=""):
+    """Pagina de tech specs: kWp, inversores, modulos, comissionamento."""
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" class="ex-logo-aevo">' if logo_b64 else ""
+    cli = f'<div class="ex-logo-cli-text">{cliente_nome}</div>'
+    kwp = float(cad.get("nominal_power_kwp") or 0)
+    n_inv = len(df_inv) if df_inv is not None and not df_inv.empty else 0
+    modelos = []
+    if df_inv is not None and not df_inv.empty and "modelo" in df_inv.columns:
+        modelos = sorted(set(str(m) for m in df_inv["modelo"] if m and str(m) != "nan"))
+    modelos_str = ", ".join(modelos[:3]) + (f" (+{len(modelos)-3})" if len(modelos) > 3 else "") if modelos else "—"
+    e_grid_pv = float(pvsyst.get("e_grid") or 0)
+    pr_pv = float(pvsyst.get("pr") or 0)
+    if pr_pv > 0 and pr_pv < 2: pr_pv = pr_pv * 100
+    glob_inc_pv = float(pvsyst.get("glob_inc") or 0)
+    return f"""
+    <div class="pag-exec">
+      <div class="ex-hdr">{logo_html}{cli}</div>
+      <div class="ex-h3">3.2 &nbsp; Especificações Técnicas</div>
+      <div class="ex-body">
+        <p>Configuração técnica e parâmetros de projeto (PVsyst) da Usina <b>{plant_name}</b>.</p>
+      </div>
+
+      <div class="ex-specs-grid">
+        <div class="ex-spec-card">
+          <div class="lbl">Potência Instalada</div>
+          <div class="val">{_fmt_n(kwp, 2)} <span class="unit">kWp</span></div>
+        </div>
+        <div class="ex-spec-card">
+          <div class="lbl">Nº de Inversores</div>
+          <div class="val">{n_inv}</div>
+        </div>
+        <div class="ex-spec-card">
+          <div class="lbl">Modelos de Inversor</div>
+          <div class="val" style="font-size:9.5pt">{modelos_str}</div>
+        </div>
+      </div>
+
+      <div class="ex-h3" style="margin-top:6mm">Parâmetros PVsyst (projeto)</div>
+      <div class="ex-specs-grid">
+        <div class="ex-spec-card">
+          <div class="lbl">Geração Esperada</div>
+          <div class="val">{_fmt_n(e_grid_pv, 0)} <span class="unit">kWh/mês</span></div>
+        </div>
+        <div class="ex-spec-card">
+          <div class="lbl">Irradiação Esperada</div>
+          <div class="val">{_fmt_n(glob_inc_pv, 2)} <span class="unit">kWh/m²·mês</span></div>
+        </div>
+        <div class="ex-spec-card">
+          <div class="lbl">Performance Ratio</div>
+          <div class="val">{_fmt_n(pr_pv, 2)} <span class="unit">%</span></div>
+        </div>
+      </div>
+
+      <div class="ex-h3" style="margin-top:6mm">Informações Operacionais</div>
+      <div class="ex-specs-grid">
+        <div class="ex-spec-card">
+          <div class="lbl">Contrato O&amp;M</div>
+          <div class="val" style="font-size:10pt">{str(cad.get("om_contract") or "—")}</div>
+        </div>
+        <div class="ex-spec-card">
+          <div class="lbl">Fim de Contrato</div>
+          <div class="val" style="font-size:10pt">{str(cad.get("contract_end") or "—")}</div>
+        </div>
+        <div class="ex-spec-card">
+          <div class="lbl">kWh/kWp esperado</div>
+          <div class="val">{_fmt_n(e_grid_pv/kwp, 2) if kwp else "—"} <span class="unit">kWh/kWp</span></div>
+        </div>
+      </div>
+
+      <div class="ex-ftr"><span class="ex-ftr-num">6.1</span></div>
+    </div>
+    """
+
+
+# ── PAGINA: ANALISE DE INVERSORES (com grafico ch_inv) ───────────────────
+def render_analise_inversores(cliente_nome, plant_name, df_inv, logo_b64=""):
+    """Tabela + grafico de energia por inversor (com linha de media)."""
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" class="ex-logo-aevo">' if logo_b64 else ""
+    cli = f'<div class="ex-logo-cli-text">{cliente_nome}</div>'
+    rows_html = ""
+    total_e = 0; max_e = 0; min_e = 1e9
+    if df_inv is not None and not df_inv.empty:
+        total_e = float(df_inv["energia_kwh"].sum())
+        max_e = float(df_inv["energia_kwh"].max())
+        min_e = float(df_inv["energia_kwh"].min())
+        for _, r in df_inv.iterrows():
+            e_kwh = float(r["energia_kwh"])
+            pct = (e_kwh / total_e * 100) if total_e else 0
+            disp_op = float(r.get("disp_op_pct", 0) or 0)
+            esp = float(r.get("esp_kwh_kwp", 0) or 0)
+            rows_html += (
+                f"<tr>"
+                f"<td>{r['inversor']}</td>"
+                f"<td class='num'>{_fmt_n(e_kwh, 0)}</td>"
+                f"<td class='num'>{_fmt_n(pct, 2)}%</td>"
+                f"<td class='num'>{_fmt_n(esp, 2)}</td>"
+                f"<td class='num'>{_fmt_n(disp_op, 2)}%</td>"
+                f"</tr>"
+            )
+    disp_total = (max_e - min_e) / max_e * 100 if max_e else 0
+    return f"""
+    <div class="pag-exec">
+      <div class="ex-hdr">{logo_html}{cli}</div>
+      <div class="ex-h3">3.3 &nbsp; Análise por Inversor</div>
+      <div class="ex-body">
+        <p>Distribuição de energia gerada por inversor no período. A linha laranja
+        indica a média do conjunto. Inversores 15% abaixo da média aparecem em vermelho.</p>
+      </div>
+
+      <div class="ex-chart-box">
+        <div class="ex-chart-title">Energia gerada por inversor</div>
+        <div class="ex-chart-h-md"><canvas id="ex_ch_inv" class="ex-chart-canvas"></canvas></div>
+      </div>
+
+      <table class="ex-tbl" data-tbl="inversores" style="font-size:8pt">
+        <thead><tr>
+          <th>INVERSOR</th>
+          <th class="num">ENERGIA (kWh)</th>
+          <th class="num">% TOTAL</th>
+          <th class="num">kWh/kWp</th>
+          <th class="num">DISP. OP (%)</th>
+        </tr></thead>
+        <tbody>{rows_html}</tbody>
+      </table>
+
+      <div class="ex-obs">
+        <b>Indicadores de dispersão:</b> Máximo: <b>{_fmt_n(max_e, 0)} kWh</b> •
+        Mínimo: <b>{_fmt_n(min_e, 0) if min_e < 1e9 else "—"} kWh</b> •
+        Dispersão (max−min)/max: <b>{_fmt_n(disp_total, 2)}%</b>
+      </div>
+
+      <div class="ex-ftr"><span class="ex-ftr-num">6.2</span></div>
+    </div>
+    """
+
+
+# ── PAGINA: TENDENCIAS DIARIAS (ger_dia + poa) ───────────────────────────
+def render_tendencias_diarias(cliente_nome, plant_name, ano, mes, logo_b64=""):
+    """Graficos: geracao diaria + POA diaria. Dados via Chart.js."""
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" class="ex-logo-aevo">' if logo_b64 else ""
+    cli = f'<div class="ex-logo-cli-text">{cliente_nome}</div>'
+    return f"""
+    <div class="pag-exec">
+      <div class="ex-hdr">{logo_html}{cli}</div>
+      <div class="ex-h3">3.4 &nbsp; Tendências Diárias</div>
+      <div class="ex-body">
+        <p>Variação dia a dia da geração e irradiação ao longo de {MESES_PT[mes]}/{ano}.
+        Linhas tracejadas representam médias do período.</p>
+      </div>
+
+      <div class="ex-chart-box">
+        <div class="ex-chart-title">Geração diária (kWh)</div>
+        <div class="ex-chart-h-md"><canvas id="ex_ch_ger" class="ex-chart-canvas"></canvas></div>
+      </div>
+
+      <div class="ex-chart-box">
+        <div class="ex-chart-title">Irradiação POA diária (kWh/m²)</div>
+        <div class="ex-chart-h-md"><canvas id="ex_ch_poa" class="ex-chart-canvas"></canvas></div>
+      </div>
+
+      <div class="ex-ftr"><span class="ex-ftr-num">6.3</span></div>
+    </div>
+    """
+
+
+# ── PAGINA: ANALISE DE DESVIOS ───────────────────────────────────────────
+def render_analise_desvios(cliente_nome, plant_name, kpis, pvsyst, poa,
+                            disp_op_media, logo_b64=""):
+    """Grafico de barras dos desvios + interpretacao."""
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" class="ex-logo-aevo">' if logo_b64 else ""
+    cli = f'<div class="ex-logo-cli-text">{cliente_nome}</div>'
+    er = float(kpis.get("energia_real", 0) or 0)
+    pr_r = float(kpis.get("pr_real", 0) or 0)
+    if pr_r > 0 and pr_r < 2: pr_r *= 100
+    ee = float(pvsyst.get("e_grid") or 0)
+    pr_e = float(pvsyst.get("pr") or 0)
+    if pr_e > 0 and pr_e < 2: pr_e *= 100
+    glob_inc = float(pvsyst.get("glob_inc") or 0)
+    desv_e = ((er - ee) / ee * 100) if ee else 0
+    desv_pr = ((pr_r - pr_e) / pr_e * 100) if pr_e else 0
+    desv_poa = ((poa - glob_inc) / glob_inc * 100) if (poa and glob_inc) else 0
+    desv_disp = disp_op_media - 100
+    return f"""
+    <div class="pag-exec">
+      <div class="ex-hdr">{logo_html}{cli}</div>
+      <div class="ex-h3">3.5 &nbsp; Análise de Desvios vs. PVsyst</div>
+      <div class="ex-body">
+        <p>Comparação dos valores medidos com as projeções PVsyst originais.
+        Valores positivos (verde) indicam superação da expectativa.</p>
+      </div>
+
+      <div class="ex-chart-box">
+        <div class="ex-chart-title">Desvio percentual por indicador</div>
+        <div class="ex-chart-h-md"><canvas id="ex_ch_dev" class="ex-chart-canvas"></canvas></div>
+      </div>
+
+      <table class="ex-tbl" style="font-size:9pt">
+        <thead><tr>
+          <th>INDICADOR</th>
+          <th class="num">PVSYST</th>
+          <th class="num">MEDIDO</th>
+          <th class="num">DESVIO (%)</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>Energia (kWh)</td>
+              <td class="num">{_fmt_n(ee, 2)}</td>
+              <td class="num">{_fmt_n(er, 2)}</td>
+              <td class="num">{_fmt_signed_pct(desv_e, 2)}</td></tr>
+          <tr><td>Performance Ratio (%)</td>
+              <td class="num">{_fmt_n(pr_e, 2)}</td>
+              <td class="num">{_fmt_n(pr_r, 2) if 0 < pr_r <= 120 else "—"}</td>
+              <td class="num">{_fmt_signed_pct(desv_pr, 2) if (0 < pr_r <= 120 and pr_e) else "—"}</td></tr>
+          <tr><td>Irradiação POA (kWh/m²)</td>
+              <td class="num">{_fmt_n(glob_inc, 2)}</td>
+              <td class="num">{_fmt_n(poa, 2) if poa >= 30 else "—"}</td>
+              <td class="num">{_fmt_signed_pct(desv_poa, 2) if (poa >= 30 and glob_inc) else "—"}</td></tr>
+          <tr><td>Disponibilidade Operação (%)</td>
+              <td class="num">99,00</td>
+              <td class="num">{_fmt_n(disp_op_media, 2)}</td>
+              <td class="num">{_fmt_signed_pct(desv_disp, 2)}</td></tr>
+        </tbody>
+      </table>
+      <div class="ex-tbl-cap"><b>Tabela:</b> Resumo de desvios PVsyst × Medido</div>
+
+      <div class="ex-ftr"><span class="ex-ftr-num">6.4</span></div>
+    </div>
+    """
+
+
+# ── PAGINA: ANALISE OCORRENCIAS COM GRAFICOS (atualizada) ────────────────
+def render_analise_ocorrencias_v2(cliente_nome, plant_name, ano, mes,
+                                    kpis_5est, df_paradas, df_al=None,
+                                    horas_por_causa=None, logo_b64=""):
+    """Versao v2 com grafico donut + heatmap + KPIs."""
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" class="ex-logo-aevo">' if logo_b64 else ""
+    cli = f'<div class="ex-logo-cli-text">{cliente_nome}</div>'
+    pct_ger = float(kpis_5est.get("pct_geracao", 0)) if kpis_5est else 0
+    pct_conc = float(kpis_5est.get("pct_conc", 0)) if kpis_5est else 0
+    pct_om = float(kpis_5est.get("pct_om", 0)) if kpis_5est else 0
+    pct_irr = float(kpis_5est.get("pct_irr", 0)) if kpis_5est else 0
+    n_par = len(df_paradas) if df_paradas is not None and not df_paradas.empty else 0
+    n_al  = len(df_al) if df_al is not None and not df_al.empty else 0
+    total_ev = n_par + n_al
+    total_h = float(df_paradas["duracao_h"].sum()) if (df_paradas is not None and not df_paradas.empty) else 0
+    em_aberto = 0
+    if df_paradas is not None and not df_paradas.empty and "fim" in df_paradas.columns:
+        em_aberto = int(df_paradas["fim"].apply(lambda x: not x or str(x).strip() == "").sum())
+    return f"""
+    <div class="pag-exec">
+      <div class="ex-hdr">{logo_html}{cli}</div>
+      <div class="ex-h3">3.6 &nbsp; Análise de Disponibilidade e Ocorrências</div>
+      <div class="ex-body">
+        <p>Classificação de causa raiz das ocorrências e impacto na disponibilidade
+        — sistema de cinco estados.</p>
+      </div>
+
+      <div class="ex-kpi-grid">
+        <div class="ex-kpi-card green">
+          <div class="lbl">Disp. Geração</div>
+          <div class="val" data-kpi="disp_ger" data-fmt="p2">{_fmt_p(pct_ger, 2)}%</div>
+        </div>
+        <div class="ex-kpi-card blue">
+          <div class="lbl">Perdas Concess.</div>
+          <div class="val" data-kpi="pct_conc" data-fmt="p2">{_fmt_p(pct_conc, 2)}%</div>
+        </div>
+        <div class="ex-kpi-card red">
+          <div class="lbl">Perdas Eq./O&amp;M</div>
+          <div class="val" data-kpi="pct_om" data-fmt="p2">{_fmt_p(pct_om, 2)}%</div>
+        </div>
+        <div class="ex-kpi-card">
+          <div class="lbl">Perdas Irradiação</div>
+          <div class="val">{_fmt_p(pct_irr, 2)}%</div>
+        </div>
+        <div class="ex-kpi-card orange">
+          <div class="lbl">Total Eventos</div>
+          <div class="val" data-kpi="total_ev" data-fmt="n0">{total_ev}</div>
+        </div>
+        <div class="ex-kpi-card green">
+          <div class="lbl">Fechados</div>
+          <div class="val">{total_ev - em_aberto}</div>
+        </div>
+        <div class="ex-kpi-card">
+          <div class="lbl">Em aberto</div>
+          <div class="val">{em_aberto}</div>
+        </div>
+        <div class="ex-kpi-card">
+          <div class="lbl">Total Horas OFF</div>
+          <div class="val" data-kpi="total_h_off" data-fmt="h2">{_fmt_n(total_h, 1)} h</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-top:4mm">
+        <div class="ex-chart-box">
+          <div class="ex-chart-title">Distribuição por responsabilidade</div>
+          <div class="ex-chart-h-md"><canvas id="ex_ch_donut" class="ex-chart-canvas"></canvas></div>
+        </div>
+        <div class="ex-chart-box">
+          <div class="ex-chart-title">Mapa Inversor × Dia do mês</div>
+          <div class="ex-chart-h-md"><canvas id="ex_ch_heat" class="ex-chart-canvas"></canvas></div>
+        </div>
+      </div>
+
+      <div class="ex-ftr"><span class="ex-ftr-num">7</span></div>
+    </div>
+    """
+
+
+# ── SCRIPT Chart.js para os graficos do executivo ────────────────────────
+def render_executivo_charts_js(charts, df_inv, df_paradas, kpis_5est,
+                                disp_dia_inv, ano, mes, dias_mes,
+                                df_daily=None, df_poa_dia=None, kpis=None,
+                                pvsyst=None, poa=0):
+    """Gera <script> que inicializa todos os Chart.js do exec.
+
+    Reconstroi datasets a partir dos DataFrames brutos (independente de
+    `charts` pre-built do app.py).
+    """
+    import json as _json
+    # Inversores
+    inv_labels = []
+    inv_data = []
+    inv_media = 0
+    if df_inv is not None and not df_inv.empty:
+        inv_labels = [str(r["inversor"]) for _, r in df_inv.iterrows()]
+        inv_data = [round(float(r["energia_kwh"]), 2) for _, r in df_inv.iterrows()]
+        inv_media = round(float(df_inv["energia_kwh"].mean()), 2) if inv_data else 0
+
+    # Geração diária — agrega df_daily por dia
+    ger_labels = [str(d) for d in range(1, dias_mes + 1)]
+    ger_data = [0.0] * dias_mes
+    if df_daily is not None and not df_daily.empty:
+        for _, r in df_daily.iterrows():
+            d = r["dia"]
+            if hasattr(d, "strftime"): dia_n = int(d.strftime("%d"))
+            else:
+                s = str(d); dia_n = int(s[8:10]) if "-" in s else int(s[6:8])
+            if 1 <= dia_n <= dias_mes:
+                ger_data[dia_n - 1] += float(r["energia_kwh"])
+    ger_data = [round(v, 2) for v in ger_data]
+    ger_media = round(sum(v for v in ger_data if v > 0) / max(sum(1 for v in ger_data if v > 0), 1), 0)
+
+    # POA diária
+    poa_data = []
+    if df_poa_dia is not None and hasattr(df_poa_dia, "empty") and not df_poa_dia.empty:
+        poa_data = [0.0] * dias_mes
+        for _, r in df_poa_dia.iterrows():
+            try:
+                d = r.get("dia") or r.get("dt")
+                if hasattr(d, "day"): dia_n = d.day
+                else: dia_n = int(str(d)[8:10])
+                if 1 <= dia_n <= dias_mes:
+                    poa_data[dia_n - 1] = float(r.get("poa", r.get("poa_kwh_m2", 0)) or 0)
+            except: continue
+    glob_inc = float(pvsyst.get("glob_inc") or 0) if pvsyst else 0
+    poa_media_pvsyst = round(glob_inc / dias_mes, 2) if dias_mes else 0
+
+    # Desvios
+    er = float(kpis.get("energia_real", 0) or 0) if kpis else 0
+    pr_r = float(kpis.get("pr_real", 0) or 0) if kpis else 0
+    if pr_r > 0 and pr_r < 2: pr_r *= 100
+    disp_g = float(kpis.get("disp_ger", 0) or 0) if kpis else 0
+    ee = float(pvsyst.get("e_grid") or 0) if pvsyst else 0
+    pr_e = float(pvsyst.get("pr") or 0) if pvsyst else 0
+    if pr_e > 0 and pr_e < 2: pr_e *= 100
+    desv_e = round((er - ee) / ee * 100, 1) if ee else 0
+    desv_pr = round((pr_r - pr_e) / pr_e * 100, 1) if pr_e else 0
+    desv_poa = round((poa - glob_inc) / glob_inc * 100, 1) if (poa and glob_inc) else 0
+    desv_cob = round(disp_g - 100, 1)
+    dev_data_arr = [desv_e, desv_pr, desv_poa, desv_cob]
+
+    # Heatmap data
+    heatmap_data = {}
+    all_invs_hm = []
+    if df_paradas is not None and not df_paradas.empty:
+        import re as _re
+        for _, r in df_paradas.iterrows():
+            inv = str(r["inversor"])
+            m = _re.match(r"(\d{2})/(\d{2})/\d{4}", str(r["inicio"]))
+            if m:
+                dia = int(m.group(1))
+                resp = str(r.get("responsavel", "?"))
+                cor = 3 if ("Equipamento" in resp or "O&M" in resp) else (
+                       2 if "Concession" in resp else 1)
+                key = f"{inv}_{dia}"
+                heatmap_data[key] = max(heatmap_data.get(key, 0), cor)
+        all_invs_hm = sorted(set(k.split("_")[0] for k in heatmap_data.keys()))
+    # 5-estados donut
+    pct_ger_pure = float(kpis_5est.get("pct_ger_pure", 99)) if kpis_5est else 99
+    pct_irr = float(kpis_5est.get("pct_irr", 0)) if kpis_5est else 0
+    pct_conc = float(kpis_5est.get("pct_conc", 0)) if kpis_5est else 0
+    pct_om = float(kpis_5est.get("pct_om", 0)) if kpis_5est else 0
+
+    return f"""
+    <script>
+    window.addEventListener("load", function() {{
+      if (typeof Chart === "undefined") return;
+      Chart.defaults.devicePixelRatio = 2;
+      Chart.defaults.font.family = "'Inter', sans-serif";
+      Chart.defaults.font.size = 8;
+      Chart.defaults.color = "#374151";
+
+      // ── Inversores ──
+      var invL = {_json.dumps(inv_labels)};
+      var invD = {_json.dumps(inv_data)};
+      var invM = {inv_media};
+      var c1 = document.getElementById("ex_ch_inv");
+      if (c1 && invL.length) {{
+        new Chart(c1, {{
+          type: "bar",
+          data: {{
+            labels: invL,
+            datasets: [
+              {{label: "Energia (kWh)", data: invD,
+                backgroundColor: invD.map(function(v){{return v < invM*.85 ? "rgba(228,92,84,.82)" : "rgba(15,158,213,.78)";}}),
+                borderWidth: 0}},
+              {{label: "Média", data: Array(invL.length).fill(Math.round(invM)),
+                type: "line", borderColor: "#E97132", borderWidth: 1.5,
+                pointRadius: 0, fill: false, tension: 0}}
+            ]
+          }},
+          options: {{
+            responsive: true, maintainAspectRatio: false,
+            plugins: {{legend: {{position: "top", labels: {{boxWidth: 8, padding: 5}}}}}},
+            scales: {{
+              x: {{ticks: {{font: {{size: 7}}}}, grid: {{display: false}}}},
+              y: {{beginAtZero: true, grid: {{color: "rgba(0,0,0,.06)"}}}}
+            }}
+          }}
+        }});
+      }}
+
+      // ── Geração diária ──
+      var gerL = {_json.dumps(ger_labels)};
+      var gerD = {_json.dumps(ger_data)};
+      var gerM = {ger_media};
+      var c2 = document.getElementById("ex_ch_ger");
+      if (c2) {{
+        new Chart(c2, {{
+          type: "bar",
+          data: {{
+            labels: gerL,
+            datasets: [
+              {{label: "Geração (kWh)", data: gerD,
+                backgroundColor: "rgba(15,158,213,.78)", borderWidth: 0}},
+              {{label: "Média", data: Array(gerL.length).fill(gerM),
+                type: "line", borderColor: "#E97132", borderWidth: 1.5,
+                pointRadius: 0, fill: false}}
+            ]
+          }},
+          options: {{
+            responsive: true, maintainAspectRatio: false,
+            plugins: {{legend: {{position: "top", labels: {{boxWidth: 8, padding: 5}}}}}},
+            scales: {{
+              x: {{ticks: {{font: {{size: 7}}}}, grid: {{display: false}}}},
+              y: {{beginAtZero: true, grid: {{color: "rgba(0,0,0,.06)"}}}}
+            }}
+          }}
+        }});
+      }}
+
+      // ── POA diária ──
+      var poaD = {_json.dumps(poa_data)};
+      var poaMpv = {poa_media_pvsyst};
+      var c3 = document.getElementById("ex_ch_poa");
+      if (c3) {{
+        if (poaD.length === 0 || poaD.every(function(v){{return v === 0;}})) {{
+          var ctx = c3.getContext("2d");
+          ctx.font = "11px Inter"; ctx.fillStyle = "#9CA3AF";
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText("Sem dados de POA diaria (planta sem estacao meteorologica)",
+                       c3.parentElement.offsetWidth/2, c3.parentElement.offsetHeight/2);
+        }} else {{
+          new Chart(c3, {{
+            type: "line",
+            data: {{
+              labels: gerL,
+              datasets: [
+                {{label: "POA medida", data: poaD,
+                  borderColor: "#27ae60", backgroundColor: "rgba(39,174,96,.15)",
+                  borderWidth: 1.8, pointRadius: 2, fill: true, tension: 0.3}},
+                {{label: "Média PVsyst", data: Array(gerL.length).fill(poaMpv),
+                  type: "line", borderColor: "#E97132", borderWidth: 1.2,
+                  pointRadius: 0, borderDash: [4,3], fill: false}}
+              ]
+            }},
+            options: {{
+              responsive: true, maintainAspectRatio: false,
+              plugins: {{legend: {{position: "top", labels: {{boxWidth: 8, padding: 5}}}}}},
+              scales: {{
+                x: {{ticks: {{font: {{size: 7}}}}, grid: {{display: false}}}},
+                y: {{beginAtZero: true, grid: {{color: "rgba(0,0,0,.06)"}}}}
+              }}
+            }}
+          }});
+        }}
+      }}
+
+      // ── Desvios ──
+      var devD = {_json.dumps(dev_data_arr)};
+      var c4 = document.getElementById("ex_ch_dev");
+      if (c4) {{
+        new Chart(c4, {{
+          type: "bar",
+          data: {{
+            labels: ["Energia", "PR", "Irradiação POA", "Cobertura"],
+            datasets: [{{
+              label: "Desvio (%)", data: devD,
+              backgroundColor: devD.map(function(v){{return v < 0 ? "rgba(231,76,60,.82)" : "rgba(39,174,96,.82)";}}),
+              borderWidth: 0
+            }}]
+          }},
+          options: {{
+            indexAxis: "y",
+            responsive: true, maintainAspectRatio: false,
+            plugins: {{legend: {{display: false}},
+                      tooltip: {{callbacks: {{label: function(c){{return c.raw + "%";}}}}}}}},
+            scales: {{
+              x: {{ticks: {{font: {{size: 7}}, callback: function(v){{return v + "%";}}}}, grid: {{color: "rgba(0,0,0,.04)"}}}},
+              y: {{ticks: {{font: {{size: 8.5}}}}, grid: {{display: false}}}}
+            }}
+          }}
+        }});
+      }}
+
+      // ── Donut 5-estados ──
+      var c5 = document.getElementById("ex_ch_donut");
+      if (c5) {{
+        new Chart(c5, {{
+          type: "doughnut",
+          data: {{
+            labels: ["Geração", "Baixa Irrad.", "Concessionária", "Equip./O&M"],
+            datasets: [{{
+              data: [{pct_ger_pure}, {pct_irr}, {pct_conc}, {pct_om}],
+              backgroundColor: ["#2CA66F", "#A8D8B9", "#0F9ED5", "#E45C54"],
+              borderWidth: 1, borderColor: "#fff"
+            }}]
+          }},
+          options: {{
+            responsive: true, maintainAspectRatio: false, cutout: "62%",
+            plugins: {{legend: {{position: "bottom", labels: {{boxWidth: 8, padding: 4}}}}}}
+          }}
+        }});
+      }}
+
+      // ── Heatmap (canvas custom) ──
+      var c6 = document.getElementById("ex_ch_heat");
+      var hd = {_json.dumps(heatmap_data)};
+      var hi = {_json.dumps(all_invs_hm)};
+      var dm = {dias_mes};
+      function drawHeat() {{
+        if (!c6) return;
+        var rect = c6.parentElement.getBoundingClientRect();
+        if (rect.width < 10) {{ requestAnimationFrame(drawHeat); return; }}
+        var cx = c6.getContext("2d");
+        var W = rect.width, H = rect.height;
+        c6.width = W * 2; c6.height = H * 2;
+        c6.style.width = W + "px"; c6.style.height = H + "px";
+        cx.scale(2, 2);
+        var pL = 40, pR = 6, pT = 14, pB = 6;
+        var cw = (W - pL - pR) / dm;
+        var ch2 = (H - pT - pB) / Math.max(hi.length, 1);
+        var cm = {{0: "#D6F5E3", 1: "#FFF4D6", 2: "#0F9ED5", 3: "#E45C54"}};
+        cx.font = "600 6.5px Inter"; cx.fillStyle = "#374151"; cx.textAlign = "center";
+        for (var d = 0; d < dm; d++) cx.fillText("" + (d+1), pL + d*cw + cw/2, pT-3);
+        cx.textAlign = "right"; cx.textBaseline = "middle";
+        for (var i = 0; i < hi.length; i++) {{
+          cx.fillStyle = "#374151";
+          cx.fillText(hi[i].replace("Inverter","Inv").substring(0,12), pL-3, pT + i*ch2 + ch2/2);
+          for (var d = 0; d < dm; d++) {{
+            var t = hd[hi[i] + "_" + (d+1)] || 0;
+            cx.fillStyle = cm[t];
+            cx.fillRect(pL + d*cw + 0.5, pT + i*ch2 + 0.5, cw - 1, ch2 - 1);
+          }}
+        }}
+        requestAnimationFrame(function() {{ window.__report_ready = true; }});
+      }}
+      if (c6) requestAnimationFrame(drawHeat);
+      else window.__report_ready = true;
+    }});
+    </script>
+    """
+
+
 # ── FUNCAO PRINCIPAL ─────────────────────────────────────────────────────
-def render_executivo_html(data, ano, mes, logo_b64=""):
+def render_executivo_html(data, ano, mes, logo_b64="", charts=None):
     """Gera HTML completo do relatorio executivo.
 
     Args:
@@ -764,7 +1384,7 @@ def render_executivo_html(data, ano, mes, logo_b64=""):
     """
     cad = data.get("cad", {})
     plant_name = str(cad.get("name", "Usina"))
-    cliente_nome = plant_name  # por enquanto sem campo cliente separado
+    cliente_nome = plant_name
     kpis = data.get("kpis", {}) or {}
     pvsyst = data.get("pvsyst", {}) or {}
     kpis_5est = data.get("kpis_5est")
@@ -774,31 +1394,56 @@ def render_executivo_html(data, ano, mes, logo_b64=""):
     df_al = data.get("df_al")
     df_poa_dia = data.get("df_poa_dia")
     fonte_energia = data.get("fonte_energia", "")
+    poa = float(data.get("poa", 0) or 0)
+    # df_inv pode vir embutido em kpis
+    df_inv = kpis.get("df_inv") if isinstance(kpis, dict) else None
 
     # Junta KPIs + kwp p/ uso interno
     kpis = dict(kpis)
     kpis["kwp"] = float(cad.get("nominal_power_kwp") or 0)
-    kpis["poa"] = float(data.get("poa", kpis.get("poa", 0)) or 0)
+    kpis["poa"] = poa
+
+    import calendar as _cal
+    dias_mes = _cal.monthrange(ano, mes)[1]
 
     html = "<body class='exec'>"
+    # ── Paginas iniciais ──
     html += render_capa(cliente_nome, ano, mes, logo_b64)
     html += render_sumario(cliente_nome, logo_b64)
     html += render_sobre_aevo(cliente_nome, logo_b64)
     html += render_disclaimer(cliente_nome, logo_b64)
     html += render_resumo(cliente_nome, plant_name, ano, mes, kpis, pvsyst,
                           fonte_energia=fonte_energia, logo_b64=logo_b64)
+    # ── Pagina 6: comparativo PVsyst x Medido ──
     html += render_usina_resumo(cliente_nome, plant_name, ano, mes,
                                  kpis, pvsyst, disp_op_media, df_paradas,
                                  fonte_energia=fonte_energia, logo_b64=logo_b64)
+    # ── NOVAS paginas com graficos e specs ──
+    html += render_especificacoes_tecnicas(cliente_nome, plant_name, cad,
+                                             pvsyst, df_inv, logo_b64=logo_b64)
+    html += render_analise_inversores(cliente_nome, plant_name, df_inv,
+                                        logo_b64=logo_b64)
+    html += render_tendencias_diarias(cliente_nome, plant_name, ano, mes,
+                                        logo_b64=logo_b64)
+    html += render_analise_desvios(cliente_nome, plant_name, kpis, pvsyst,
+                                     poa, disp_op_media, logo_b64=logo_b64)
+    # ── Tabela diaria detalhada ──
     html += render_usina_tabela_diaria(cliente_nome, plant_name, ano, mes,
                                         df_daily, pvsyst, kpis, df_poa_dia=df_poa_dia,
                                         logo_b64=logo_b64)
-    # Tier 1: analise + tabela ocorrencias
+    # ── Analise ocorrencias + tabela (Tier 1) ──
     if kpis_5est and (kpis_5est.get("tier") == 1):
-        html += render_analise_ocorrencias(cliente_nome, plant_name, ano, mes,
-                                             kpis_5est, df_paradas, df_al=df_al,
-                                             logo_b64=logo_b64)
+        html += render_analise_ocorrencias_v2(cliente_nome, plant_name, ano, mes,
+                                                kpis_5est, df_paradas, df_al=df_al,
+                                                logo_b64=logo_b64)
         html += render_tabela_ocorrencias(cliente_nome, plant_name, ano, mes,
                                             df_paradas, logo_b64=logo_b64)
+
+    # ── Chart.js loader + inicializacao ──
+    html += '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>'
+    html += render_executivo_charts_js(charts, df_inv, df_paradas, kpis_5est,
+                                          data.get("disp_dia_inv"), ano, mes, dias_mes,
+                                          df_daily=df_daily, df_poa_dia=df_poa_dia,
+                                          kpis=kpis, pvsyst=pvsyst, poa=poa)
     html += "</body>"
     return html
